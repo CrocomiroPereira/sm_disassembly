@@ -16241,8 +16241,7 @@ DrawSamusAndProjectiles:
 
 ;;; $EB4B: Draw Samus sprites ;;;
 DrawSamusSprites:
-    JSR.W HandleArmCannonOpenState                                       ;90EB4B;
-    JMP.W (DrawingHandler)                                               ;90EB4E;
+RTS
 
 
 ;;; $EB51: RTS ;;;

@@ -1480,14 +1480,15 @@ UpdateCrocomireBG2XScroll:
 
 ;;; $8C04: Main AI - enemy $DDBF (Crocomire) ;;;
 MainAI_Crocomire:
-    PHB                                                                  ;A48C04;
-    LDA.W Crocomire.deathSequenceIndex                                   ;A48C05;
-    TAX                                                                  ;A48C08;
-    JSR.W (.pointers,X)                                                  ;A48C09;
-    JSR.W Crocomire_vs_Samus_CollisionHandling                           ;A48C0C;
-    JSR.W CrocomireHurtFlashHandling                                     ;A48C0F;
-    PLB                                                                  ;A48C12;
-    RTL                                                                  ;A48C13;
+    LDX.W EnemyIndex
+
+    LDA.W SamusXPosition
+    STA.W Enemy.XPosition,X
+
+    LDA.W SamusYPosition
+    STA.W Enemy.YPosition,X
+
+    RTL
 
   .pointers:
     dw MainAI_Crocomire_DeathSequence_0_NotStarted                       ;A48C14;
@@ -4069,11 +4070,8 @@ EnemyShot_Crocomire_SpawnShotExplosion_duplicate:
 
 ;;; $BADE: Instruction list - Crocomire - initial ;;;
 InstList_Crocomire_Initial:
-    dw $0001,ExtendedSpritemap_Crocomire_0                               ;A4BADE;
-    dw Instruction_Crocomire_FightAI                                     ;A4BAE2;
-    dw Instruction_Common_GotoY                                          ;A4BAE4;
-    dw InstList_Crocomire_Initial                                        ;A4BAE6;
-    dw Instruction_Common_Sleep                                          ;A4BAE8;
+    dw $7FFF,ExtendedSpritemap_Crocomire_0
+    dw Instruction_Common_Sleep
 
 
 ;;; $BAEA: Instruction list - Crocomire - charge forward one step (unused) ;;;
