@@ -1479,13 +1479,21 @@ UpdateCrocomireBG2XScroll:
 
 
 ;;; $8C04: Main AI - enemy $DDBF (Crocomire) ;;;
+
+
 MainAI_Crocomire:
     LDX.W EnemyIndex
 
+    ; Player prototype: Crocomire follows Samus horizontally
     LDA.W SamusXPosition
     STA.W Enemy.XPosition,X
 
+    ; Align Crocomire's feet with Samus's feet
     LDA.W SamusYPosition
+    CLC
+    ADC.W SamusYRadius
+    SEC
+    SBC.W #$0038
     STA.W Enemy.YPosition,X
 
     RTL
