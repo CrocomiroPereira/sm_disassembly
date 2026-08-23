@@ -16241,7 +16241,8 @@ DrawSamusAndProjectiles:
 
 ;;; $EB4B: Draw Samus sprites ;;;
 DrawSamusSprites:
-RTS
+    JSL.L CrocomirePlayer_Render
+    RTS
 
 
 ;;; $EB51: RTS ;;;
