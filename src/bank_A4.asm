@@ -1496,6 +1496,48 @@ MainAI_Crocomire:
     SBC.W #$0038
     STA.W Enemy.YPosition,X
 
+    ; Samus movement type 1 = running
+    LDA.W MovementType
+    AND.W #$00FF
+    CMP.W #$0001
+    BEQ .walking
+
+  .idle:
+    ; Animation state 1 = idle
+    LDA.W Crocomire.deathSequenceIndex,X
+    CMP.W #$0001
+    BEQ .animationDone
+
+    LDA.W #$0001
+    STA.W Crocomire.deathSequenceIndex,X
+
+    LDA.W #InstList_Crocomire_PlayerIdle
+    STA.W Enemy.instList,X
+
+    LDA.W #$0001
+    STA.W Enemy.instTimer,X
+
+    BRA .animationDone
+
+  .walking:
+    ; Animation state 2 = walking
+    LDA.W Crocomire.deathSequenceIndex,X
+    CMP.W #$0002
+    BEQ .animationDone
+
+    LDA.W #$0002
+    STA.W Crocomire.deathSequenceIndex,X
+
+    LDA.W #InstList_Crocomire_Initial
+    STA.W Enemy.instList,X
+
+    LDA.W #$0001
+    STA.W Enemy.instTimer,X
+
+  .animationDone:
+    ; Keep Crocomire's vanilla BG2 body/head aligned with player
+    JSL.L UpdateCrocomireBG2Scroll
+
     RTL
 
   .pointers:
@@ -4077,8 +4119,29 @@ EnemyShot_Crocomire_SpawnShotExplosion_duplicate:
 
 
 ;;; $BADE: Instruction list - Crocomire - initial ;;;
+;;; DEV - playable Crocomire walking animation ;;;
+
+;;; DEV - playable Crocomire idle ;;;
+InstList_Crocomire_PlayerIdle:
+    dw $7FFF,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_0
+    dw Instruction_Common_Sleep
+
+
 InstList_Crocomire_Initial:
-    dw $7FFF,ExtendedSpritemap_Crocomire_0
+    dw $0006,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_0
+    dw $0007,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_1
+    dw $0007,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_2
+    dw $0006,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_3
+    dw $0007,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_4
+    dw $0007,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_5
+    dw $0006,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_6
+    dw $0007,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_7
+    dw $0007,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_8
+    dw $0006,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_9
+    dw $0007,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_A
+    dw $0007,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_B
+    dw Instruction_Common_GotoY
+    dw InstList_Crocomire_Initial
     dw Instruction_Common_Sleep
 
 
