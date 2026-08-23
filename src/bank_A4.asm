@@ -1484,6 +1484,27 @@ UpdateCrocomireBG2XScroll:
 MainAI_Crocomire:
     LDX.W EnemyIndex
 
+    ; Track player facing direction
+    LDA.W PoseXDirection
+    AND.W #$000C
+    CMP.W #$0004
+    BEQ .facingLeft
+    CMP.W #$0008
+    BEQ .facingRight
+    BRA .facingDone
+
+  .facingLeft:
+    LDA.W #$0000
+    STA.W Crocomire.fightFlags,X
+    BRA .facingDone
+
+  .facingRight:
+    LDA.W #$0001
+    STA.W Crocomire.fightFlags,X
+
+  .facingDone:
+
+
     ; Keep Crocomire's secondary enemy part locked to player position
     LDA.W SamusXPosition
     STA.W Enemy[1].XPosition,X
