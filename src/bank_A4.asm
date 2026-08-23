@@ -1484,6 +1484,18 @@ UpdateCrocomireBG2XScroll:
 MainAI_Crocomire:
     LDX.W EnemyIndex
 
+    ; Keep Crocomire's secondary enemy part locked to player position
+    LDA.W SamusXPosition
+    STA.W Enemy[1].XPosition,X
+
+    LDA.W SamusYPosition
+    CLC
+    ADC.W SamusYRadius
+    SEC
+    SBC.W #$0038
+    STA.W Enemy[1].YPosition,X
+
+
     ; Player prototype: Crocomire follows Samus horizontally
     LDA.W SamusXPosition
     STA.W Enemy.XPosition,X
