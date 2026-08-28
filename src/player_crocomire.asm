@@ -80,7 +80,7 @@ CrocomirePlayer_Render:
     SEC
     SBC.W Layer1XPosition
     CLC
-    ADC.W #$004D          ; $50 - 3
+    ADC.W #$006D          ; $50 - 3
     STA.B DP_Temp14
 
     LDA.W SamusYPosition
@@ -165,7 +165,7 @@ CrocomirePlayer_Render:
     SEC
     SBC.W Layer1YPosition
     SEC
-    SBC.W #$0041
+    SBC.W #$004B
     STA.B DP_Temp12
 
     STZ.B DP_Temp00
@@ -394,7 +394,7 @@ CrocomirePlayer_TestSpritemap_5:
    
 
 CrocomirePlayer_FullBodySpritemap:
-    dw $0031
+    dw $0038
 
     %spritemapEntry(1, $30, $00, 0, 0, 3, 0, $40)
     %spritemapEntry(1, $40, $00, 0, 0, 3, 0, $42)
@@ -404,29 +404,35 @@ CrocomirePlayer_FullBodySpritemap:
     %spritemapEntry(1, $40, $10, 0, 0, 3, 0, $4A)
     %spritemapEntry(1, $50, $10, 0, 0, 3, 0, $4C)
     %spritemapEntry(1, $20, $18, 0, 0, 3, 0, $4E)
+
     %spritemapEntry(1, $00, $20, 0, 0, 3, 0, $60)
     %spritemapEntry(1, $10, $20, 0, 0, 3, 0, $62)
     %spritemapEntry(1, $30, $20, 0, 0, 3, 0, $64)
     %spritemapEntry(1, $40, $20, 0, 0, 3, 0, $66)
     %spritemapEntry(1, $50, $20, 0, 0, 3, 0, $68)
     %spritemapEntry(1, $20, $28, 0, 0, 3, 0, $6A)
+
     %spritemapEntry(1, $10, $30, 0, 0, 3, 0, $6C)
     %spritemapEntry(1, $30, $30, 0, 0, 3, 0, $6E)
     %spritemapEntry(1, $40, $30, 0, 0, 3, 0, $80)
     %spritemapEntry(1, $50, $30, 0, 0, 3, 0, $82)
     %spritemapEntry(1, $20, $38, 0, 0, 3, 0, $84)
+
     %spritemapEntry(1, $08, $40, 0, 0, 3, 0, $86)
     %spritemapEntry(1, $30, $40, 0, 0, 3, 0, $88)
     %spritemapEntry(1, $40, $40, 0, 0, 3, 0, $8A)
     %spritemapEntry(1, $18, $48, 0, 0, 3, 0, $8C)
+
     %spritemapEntry(1, $08, $50, 0, 0, 3, 0, $8E)
     %spritemapEntry(1, $28, $50, 0, 0, 3, 0, $A0)
     %spritemapEntry(1, $38, $50, 0, 0, 3, 0, $A2)
     %spritemapEntry(1, $48, $50, 0, 0, 3, 0, $A4)
     %spritemapEntry(1, $18, $58, 0, 0, 3, 0, $A6)
+
     %spritemapEntry(1, $28, $60, 0, 0, 3, 0, $A8)
     %spritemapEntry(1, $48, $60, 0, 0, 3, 0, $AA)
     %spritemapEntry(1, $58, $60, 0, 0, 3, 0, $AC)
+
     %spritemapEntry(0, $50, $08, 0, 0, 3, 0, $32)
     %spritemapEntry(0, $08, $18, 0, 0, 3, 0, $33)
     %spritemapEntry(0, $18, $40, 0, 0, 3, 0, $34)
@@ -434,17 +440,34 @@ CrocomirePlayer_FullBodySpritemap:
     %spritemapEntry(0, $58, $40, 0, 0, 3, 0, $36)
     %spritemapEntry(0, $28, $48, 0, 0, 3, 0, $37)
     %spritemapEntry(0, $50, $48, 0, 0, 3, 0, $38)
+
     %spritemapEntry(0, $08, $60, 0, 0, 3, 0, $39)
     %spritemapEntry(0, $10, $60, 0, 0, 3, 0, $3A)
     %spritemapEntry(0, $38, $60, 0, 0, 3, 0, $3B)
     %spritemapEntry(0, $40, $60, 0, 0, 3, 0, $3C)
     %spritemapEntry(0, $68, $60, 0, 0, 3, 0, $3D)
     %spritemapEntry(0, $70, $60, 0, 0, 3, 0, $3E)
+
     %spritemapEntry(0, $10, $68, 0, 0, 3, 0, $3F)
     %spritemapEntry(0, $18, $68, 0, 0, 3, 0, $AE)
     %spritemapEntry(0, $20, $68, 0, 0, 3, 0, $AF)
     %spritemapEntry(0, $38, $68, 0, 0, 3, 0, $BE)
     %spritemapEntry(0, $78, $68, 0, 0, 3, 0, $BF)
+
+    ;---------------------------------------------------------------------------
+    ; Iteration 8 - restored body tiles
+    ;
+    ; These seven OBJ tile slots already existed inside $6000-$6BFF but were
+    ; not referenced by the arm or leg spritemaps.
+    ;---------------------------------------------------------------------------
+
+    %spritemapEntry(0, $00, $18, 0, 0, 3, 0, $0E)
+    %spritemapEntry(0, $40, $68, 0, 0, 3, 0, $0F)
+    %spritemapEntry(0, $58, $08, 0, 0, 3, 0, $27)
+    %spritemapEntry(0, $50, $00, 0, 0, 3, 0, $28)
+    %spritemapEntry(0, $28, $00, 0, 0, 3, 0, $29)
+    %spritemapEntry(0, $70, $68, 0, 0, 3, 0, $2A)
+    %spritemapEntry(0, $18, $08, 0, 0, 3, 0, $2B)
 
 
 ;-------------------------------------------------------------------------------
