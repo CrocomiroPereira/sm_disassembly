@@ -8828,7 +8828,8 @@ EnemyPopulations_ThreeMusketeers:
     %properties($A800),
     %extraProperties($FF00),
     %speedParams($4003, $0000))
-    dw $FFFF : db $03                                                    ;A1BB0B;
+    dw $FFFF : db $03         
+                                               ;A1BB0B;
 EnemyPopulations_Crocomire:
 ; Room $A98D, state $A99F
 ; Room $A98D, state $A9B9
@@ -8838,7 +8839,7 @@ EnemyPopulations_Crocomire:
     %XPosition($0480),
     %YPosition($0078),
     %initParam(InstList_Crocomire_WaitForFirstSecondDamage_Roar),
-    %properties($AC00),
+    %properties($AD00),
     %extraProperties($0004),
     %speedParams($0000, $0000))
 
@@ -8847,7 +8848,7 @@ EnemyPopulations_Crocomire:
     %XPosition($0480),
     %YPosition($0078),
     %initParam(InstList_Crocomire_WaitForFirstSecondDamage_Roar),
-    %properties($AC00),
+    %properties($AD00),
     %extraProperties($0004),
     %speedParams($0000, $0000))
     dw $FFFF : db $00                                                    ;A1BB2E;
