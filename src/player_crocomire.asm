@@ -72,90 +72,37 @@ CrocomirePlayer_Render:
     ; OAM component 3 (persistent arm section)
     ;===========================================================================
 
-    ; X = Samus screen X + 80 px
-    ; ExtendedTilemap_Crocomire_3 vanilla position:
-    ; (-3, -11) relative to Spritemap_Crocomire_3
+
+    ;===========================================================================
+    ; Crocomire Player 80%
+    ;
+    ; Both layers share one origin:
+    ;   body  -> sprite palette 6
+    ;   limbs -> sprite palette 7
+    ;
+    ; The 80% image was generated from the complete Crocomire composition.
+    ;===========================================================================
+
+    ;---------------------------------------------------------------------------
+    ; Shared X origin
+    ;
+    ; Current centered full-size body origin was -11 px.
+    ; The original composite extended 6 px farther left than the body,
+    ; so the new scaled composite origin is approximately -16 px.
+    ;---------------------------------------------------------------------------
 
     LDA.W SamusXPosition
     SEC
     SBC.W Layer1XPosition
     CLC
-    ADC.W #$002D          ; $50 - 3
+    ADC.W #$FFF0
     STA.B DP_Temp14
 
-    LDA.W SamusYPosition
-    CLC
-    ADC.W SamusYRadius
-    SEC
-    SBC.W #$002C
-    SEC
-    SBC.W Layer1YPosition
-    SEC
-    SBC.W #$0001
-    STA.B DP_Temp12
-
-    ; Player OBJ tile base $00
-    STZ.B DP_Temp00
-
-    ; Sprite palette 7
-    LDA.W #$0E00
-    STA.B DP_Temp03
-
-    LDY.W #CrocomirePlayer_TestSpritemap
-    JSL.L AddSpritemapToOAM_WithBaseTileNumber_8B22
-
-
-    ;===========================================================================
-    ; OAM component B (first leg section)
+    ;---------------------------------------------------------------------------
+    ; Shared Y origin
     ;
-    ; Vanilla extended-frame offsets:
-    ; Spritemap_3 = (+3, +11)
-    ; Spritemap_B = ( 0, +38)
-    ; Relative: X - 3, Y + 27
-    ;===========================================================================
-
-    LDA.B DP_Temp14
-    SEC
-    SBC.W #$0003
-    STA.B DP_Temp14
-
-    LDA.B DP_Temp12
-    CLC
-    ADC.W #$001B
-    STA.B DP_Temp12
-
-    ; Player OBJ tile base $40
-    LDA.W #$001C
-    STA.B DP_Temp00
-
-    LDY.W #CrocomirePlayer_TestSpritemap_B
-    JSL.L AddSpritemapToOAM_WithBaseTileNumber_8B22
-
-
-    ;===========================================================================
-    ; OAM component 5 (second leg section)
-    ;
-    ; Vanilla offset relative to B: X - 29, same Y
-    ;===========================================================================
-
-    LDA.B DP_Temp14
-    SEC
-    SBC.W #$001D
-    STA.B DP_Temp14
-
-    LDY.W #CrocomirePlayer_TestSpritemap_5
-    JSL.L AddSpritemapToOAM_WithBaseTileNumber_8B22
-
-    ;===========================================================================
-    ; Full static Crocomire BG body
-    ;===========================================================================
-
-    LDA.W SamusXPosition
-    SEC
-    SBC.W Layer1XPosition
-    CLC
-    ADC.W #$FFF5
-    STA.B DP_Temp14
+    ; Keep the proven vertical reference for this first 80% test.
+    ;---------------------------------------------------------------------------
 
     LDA.W SamusYPosition
     CLC
@@ -168,19 +115,34 @@ CrocomirePlayer_Render:
     SBC.W #$004B
     STA.B DP_Temp12
 
+    ;---------------------------------------------------------------------------
+    ; Body - sprite palette 6
+    ;---------------------------------------------------------------------------
+
     STZ.B DP_Temp00
 
-    ; Crocomire BG palette in sprite palette 6
     LDA.W #$0C00
     STA.B DP_Temp03
 
-    LDY.W #CrocomirePlayer_FullBodySpritemap
+    LDY.W #CrocomirePlayer80_BodySpritemap
     JSL.L AddSpritemapToOAM_WithBaseTileNumber_8B22
+
+    ;---------------------------------------------------------------------------
+    ; Arm + legs - sprite palette 7
+    ;---------------------------------------------------------------------------
+
+    STZ.B DP_Temp00
+
+    LDA.W #$0E00
+    STA.B DP_Temp03
+
+    LDY.W #CrocomirePlayer80_LimbsSpritemap
+    JSL.L AddSpritemapToOAM_WithBaseTileNumber_8B22
+
 
     PLB
     PLP
     RTL
-
 
 ;-------------------------------------------------------------------------------
 ; Queue persistent Crocomire graphics to VRAM
@@ -474,6 +436,60 @@ CrocomirePlayer_FullBodySpritemap:
 ; Prevent player-renderer code/data from overflowing bank A4
 ;-------------------------------------------------------------------------------
 
+CrocomirePlayer80_BodySpritemap:
+    dw $0023
+    %spritemapEntry(1, $10, $00, 0, 0, 3, 0, $00)
+    %spritemapEntry(1, $20, $00, 0, 0, 3, 0, $02)
+    %spritemapEntry(1, $30, $00, 0, 0, 3, 0, $04)
+    %spritemapEntry(1, $40, $00, 0, 0, 3, 0, $06)
+    %spritemapEntry(1, $00, $10, 0, 0, 3, 0, $08)
+    %spritemapEntry(1, $10, $10, 0, 0, 3, 0, $0A)
+    %spritemapEntry(1, $20, $10, 0, 0, 3, 0, $0C)
+    %spritemapEntry(1, $30, $10, 0, 0, 3, 0, $0E)
+    %spritemapEntry(1, $40, $10, 0, 0, 3, 0, $20)
+    %spritemapEntry(1, $50, $10, 0, 0, 3, 0, $22)
+    %spritemapEntry(1, $00, $20, 0, 0, 3, 0, $24)
+    %spritemapEntry(1, $10, $20, 0, 0, 3, 0, $26)
+    %spritemapEntry(1, $20, $20, 0, 0, 3, 0, $28)
+    %spritemapEntry(1, $30, $20, 0, 0, 3, 0, $2A)
+    %spritemapEntry(1, $40, $20, 0, 0, 3, 0, $2C)
+    %spritemapEntry(1, $50, $20, 0, 0, 3, 0, $2E)
+    %spritemapEntry(1, $00, $30, 0, 0, 3, 0, $40)
+    %spritemapEntry(1, $10, $30, 0, 0, 3, 0, $42)
+    %spritemapEntry(1, $20, $30, 0, 0, 3, 0, $44)
+    %spritemapEntry(1, $30, $30, 0, 0, 3, 0, $46)
+    %spritemapEntry(1, $40, $30, 0, 0, 3, 0, $48)
+    %spritemapEntry(1, $00, $40, 0, 0, 3, 0, $4A)
+    %spritemapEntry(1, $10, $40, 0, 0, 3, 0, $4C)
+    %spritemapEntry(1, $20, $40, 0, 0, 3, 0, $4E)
+    %spritemapEntry(1, $30, $40, 0, 0, 3, 0, $60)
+    %spritemapEntry(1, $40, $40, 0, 0, 3, 0, $62)
+    %spritemapEntry(1, $50, $40, 0, 0, 3, 0, $64)
+    %spritemapEntry(1, $60, $40, 0, 0, 3, 0, $66)
+    %spritemapEntry(1, $00, $50, 0, 0, 3, 0, $68)
+    %spritemapEntry(1, $10, $50, 0, 0, 3, 0, $6A)
+    %spritemapEntry(1, $20, $50, 0, 0, 3, 0, $6C)
+    %spritemapEntry(1, $30, $50, 0, 0, 3, 0, $6E)
+    %spritemapEntry(1, $40, $50, 0, 0, 3, 0, $80)
+    %spritemapEntry(1, $50, $50, 0, 0, 3, 0, $82)
+    %spritemapEntry(1, $60, $50, 0, 0, 3, 0, $84)
+
+CrocomirePlayer80_LimbsSpritemap:
+    dw $000D
+    %spritemapEntry(1, $20, $30, 0, 0, 3, 0, $86)
+    %spritemapEntry(1, $30, $30, 0, 0, 3, 0, $88)
+    %spritemapEntry(1, $40, $30, 0, 0, 3, 0, $8A)
+    %spritemapEntry(1, $00, $40, 0, 0, 3, 0, $8C)
+    %spritemapEntry(1, $10, $40, 0, 0, 3, 0, $8E)
+    %spritemapEntry(1, $20, $40, 0, 0, 3, 0, $A0)
+    %spritemapEntry(1, $30, $40, 0, 0, 3, 0, $A2)
+    %spritemapEntry(1, $40, $40, 0, 0, 3, 0, $A4)
+    %spritemapEntry(1, $00, $50, 0, 0, 3, 0, $A6)
+    %spritemapEntry(1, $10, $50, 0, 0, 3, 0, $A8)
+    %spritemapEntry(1, $20, $50, 0, 0, 3, 0, $AA)
+    %spritemapEntry(1, $30, $50, 0, 0, 3, 0, $AC)
+    %spritemapEntry(1, $40, $50, 0, 0, 3, 0, $AE)
+
 warnpc $A50000
 
 
@@ -504,6 +520,6 @@ warnpc $AE0000
 org $B88000
 
 CrocomirePlayer_FullStaticTiles:
-    incbin "../data/CrocomirePlayer_FullStatic.bin"
+    incbin "../data/CrocomirePlayer_80pct.bin"
 
 warnpc $B90000
