@@ -36,8 +36,30 @@ CrocomirePlayer_Render:
     STZ.W SamusTiles_TopHalfFlag
     STZ.W SamusTiles_BottomHalfFlag
 
-    ; Queue persistent Crocomire test graphics
+    ;===========================================================================
+    ; Load Crocomire graphics once, AFTER the room transition has finished.
+    ;
+    ; GameState $0008 = normal gameplay.
+    ;
+    ; $0A02 is unused Samus RAM. We use it to remember the last RoomPointer
+    ; for which the Crocomire player graphics were queued.
+    ;
+    ; Important:
+    ; Do NOT update the stored RoomPointer during the door transition.
+    ;===========================================================================
+
+    LDA.W GameState
+    CMP.W #$0008
+    BNE .crocomireGraphicsDone
+
+    LDA.W RoomPointer
+    CMP.W StartSamusRAM_Unused0A02
+    BEQ .crocomireGraphicsDone
+
+    STA.W StartSamusRAM_Unused0A02
     JSR.W CrocomirePlayer_QueueTestTiles
+
+  .crocomireGraphicsDone:
 
     ; Enemy/OAM Crocomire palette -> sprite palette 7
     JSR.W CrocomirePlayer_LoadTestPalette
@@ -103,7 +125,7 @@ CrocomirePlayer_Render:
     STA.B DP_Temp12
 
     ; Player OBJ tile base $40
-    LDA.W #$0040
+    LDA.W #$001C
     STA.B DP_Temp00
 
     LDY.W #CrocomirePlayer_TestSpritemap_B
@@ -124,21 +146,15 @@ CrocomirePlayer_Render:
     LDY.W #CrocomirePlayer_TestSpritemap_5
     JSL.L AddSpritemapToOAM_WithBaseTileNumber_8B22
 
-
     ;===========================================================================
-    ; BG -> OBJ body-section test
-    ;
-    ; ExtendedTilemap_Crocomire_3 has been extracted from the decompressed
-    ; Tiles_1B_Crocomire asset and repacked as OBJ-compatible 16x16 tiles.
-    ;
-    ; Draw this test separately at Samus X + 128 px.
+    ; Full static Crocomire BG body
     ;===========================================================================
 
     LDA.W SamusXPosition
     SEC
     SBC.W Layer1XPosition
     CLC
-    ADC.W #$0050
+    ADC.W #$0035
     STA.B DP_Temp14
 
     LDA.W SamusYPosition
@@ -148,17 +164,17 @@ CrocomirePlayer_Render:
     SBC.W #$002C
     SEC
     SBC.W Layer1YPosition
+    SEC
+    SBC.W #$0041
     STA.B DP_Temp12
 
-    ; $6600 corresponds to OBJ base tile $60 relative to the player OBJ region
-    LDA.W #$0060
-    STA.B DP_Temp00
+    STZ.B DP_Temp00
 
-    ; Temporary sprite palette 6 contains Crocomire's original BG palette 7
+    ; Crocomire BG palette in sprite palette 6
     LDA.W #$0C00
     STA.B DP_Temp03
 
-    LDY.W #CrocomirePlayer_BGPart3Spritemap
+    LDY.W #CrocomirePlayer_FullBodySpritemap
     JSL.L AddSpritemapToOAM_WithBaseTileNumber_8B22
 
     PLB
@@ -177,37 +193,24 @@ CrocomirePlayer_Render:
 
 CrocomirePlayer_QueueTestTiles:
     LDX.W VRAMWriteStack
-    LDY.W #$0000
 
-  .loop:
-    LDA.W CrocomirePlayer_TestTileTransfers,Y
-    CMP.W #$FFFF
-    BEQ .done
+    LDA.W #$1800
     STA.B VRAMWrite.size,X
 
-    LDA.W CrocomirePlayer_TestTileTransfers+2,Y
+    LDA.W #CrocomirePlayer_FullStaticTiles
     STA.B VRAMWrite.src,X
 
-    LDA.W #$00AD
+    LDA.W #$00B8
     STA.B VRAMWrite.src+2,X
 
-    LDA.W CrocomirePlayer_TestTileTransfers+4,Y
+    LDA.W #$6000
     STA.B VRAMWrite.dest,X
 
     TXA
     CLC
     ADC.W #$0007
-    TAX
+    STA.W VRAMWriteStack
 
-    TYA
-    CLC
-    ADC.W #$0006
-    TAY
-
-    BRA .loop
-
-  .done:
-    STX.W VRAMWriteStack
     RTS
 
 
@@ -388,57 +391,61 @@ CrocomirePlayer_TestSpritemap_5:
 ; DP_Temp00 supplies the real OBJ base tile ($60 for VRAM $6600).
 ;-------------------------------------------------------------------------------
 
-CrocomirePlayer_BGPart3Spritemap:
-    dw $0020
+   
 
-    ;===========================================================================
-    ; 8 x 4 tile section of Crocomire's body
-    ;
-    ; Left half  = previously verified red section below the arm
-    ; Right half = contiguous section from ExtendedTilemap_Crocomire_9
-    ;
-    ; All entries are 8x8 OBJ sprites.
-    ;===========================================================================
+CrocomirePlayer_FullBodySpritemap:
+    dw $0031
 
-    ; Row 0
-    %spritemapEntry(0, $00, $00, 0, 0, 3, 0, $00)
-    %spritemapEntry(0, $08, $00, 0, 0, 3, 0, $01)
-    %spritemapEntry(0, $10, $00, 0, 0, 3, 0, $02)
-    %spritemapEntry(0, $18, $00, 0, 0, 3, 0, $03)
-    %spritemapEntry(0, $20, $00, 0, 0, 3, 0, $04)
-    %spritemapEntry(0, $28, $00, 0, 0, 3, 0, $05)
-    %spritemapEntry(0, $30, $00, 0, 0, 3, 0, $06)
-    %spritemapEntry(0, $38, $00, 0, 0, 3, 0, $07)
+    %spritemapEntry(1, $30, $00, 0, 0, 3, 0, $40)
+    %spritemapEntry(1, $40, $00, 0, 0, 3, 0, $42)
+    %spritemapEntry(1, $20, $08, 0, 0, 3, 0, $44)
+    %spritemapEntry(1, $10, $10, 0, 0, 3, 0, $46)
+    %spritemapEntry(1, $30, $10, 0, 0, 3, 0, $48)
+    %spritemapEntry(1, $40, $10, 0, 0, 3, 0, $4A)
+    %spritemapEntry(1, $50, $10, 0, 0, 3, 0, $4C)
+    %spritemapEntry(1, $20, $18, 0, 0, 3, 0, $4E)
+    %spritemapEntry(1, $00, $20, 0, 0, 3, 0, $60)
+    %spritemapEntry(1, $10, $20, 0, 0, 3, 0, $62)
+    %spritemapEntry(1, $30, $20, 0, 0, 3, 0, $64)
+    %spritemapEntry(1, $40, $20, 0, 0, 3, 0, $66)
+    %spritemapEntry(1, $50, $20, 0, 0, 3, 0, $68)
+    %spritemapEntry(1, $20, $28, 0, 0, 3, 0, $6A)
+    %spritemapEntry(1, $10, $30, 0, 0, 3, 0, $6C)
+    %spritemapEntry(1, $30, $30, 0, 0, 3, 0, $6E)
+    %spritemapEntry(1, $40, $30, 0, 0, 3, 0, $80)
+    %spritemapEntry(1, $50, $30, 0, 0, 3, 0, $82)
+    %spritemapEntry(1, $20, $38, 0, 0, 3, 0, $84)
+    %spritemapEntry(1, $08, $40, 0, 0, 3, 0, $86)
+    %spritemapEntry(1, $30, $40, 0, 0, 3, 0, $88)
+    %spritemapEntry(1, $40, $40, 0, 0, 3, 0, $8A)
+    %spritemapEntry(1, $18, $48, 0, 0, 3, 0, $8C)
+    %spritemapEntry(1, $08, $50, 0, 0, 3, 0, $8E)
+    %spritemapEntry(1, $28, $50, 0, 0, 3, 0, $A0)
+    %spritemapEntry(1, $38, $50, 0, 0, 3, 0, $A2)
+    %spritemapEntry(1, $48, $50, 0, 0, 3, 0, $A4)
+    %spritemapEntry(1, $18, $58, 0, 0, 3, 0, $A6)
+    %spritemapEntry(1, $28, $60, 0, 0, 3, 0, $A8)
+    %spritemapEntry(1, $48, $60, 0, 0, 3, 0, $AA)
+    %spritemapEntry(1, $58, $60, 0, 0, 3, 0, $AC)
+    %spritemapEntry(0, $50, $08, 0, 0, 3, 0, $32)
+    %spritemapEntry(0, $08, $18, 0, 0, 3, 0, $33)
+    %spritemapEntry(0, $18, $40, 0, 0, 3, 0, $34)
+    %spritemapEntry(0, $50, $40, 0, 0, 3, 0, $35)
+    %spritemapEntry(0, $58, $40, 0, 0, 3, 0, $36)
+    %spritemapEntry(0, $28, $48, 0, 0, 3, 0, $37)
+    %spritemapEntry(0, $50, $48, 0, 0, 3, 0, $38)
+    %spritemapEntry(0, $08, $60, 0, 0, 3, 0, $39)
+    %spritemapEntry(0, $10, $60, 0, 0, 3, 0, $3A)
+    %spritemapEntry(0, $38, $60, 0, 0, 3, 0, $3B)
+    %spritemapEntry(0, $40, $60, 0, 0, 3, 0, $3C)
+    %spritemapEntry(0, $68, $60, 0, 0, 3, 0, $3D)
+    %spritemapEntry(0, $70, $60, 0, 0, 3, 0, $3E)
+    %spritemapEntry(0, $10, $68, 0, 0, 3, 0, $3F)
+    %spritemapEntry(0, $18, $68, 0, 0, 3, 0, $AE)
+    %spritemapEntry(0, $20, $68, 0, 0, 3, 0, $AF)
+    %spritemapEntry(0, $38, $68, 0, 0, 3, 0, $BE)
+    %spritemapEntry(0, $78, $68, 0, 0, 3, 0, $BF)
 
-    ; Row 1
-    %spritemapEntry(0, $00, $08, 0, 0, 3, 0, $08)
-    %spritemapEntry(0, $08, $08, 0, 0, 3, 0, $09)
-    %spritemapEntry(0, $10, $08, 0, 0, 3, 0, $0A)
-    %spritemapEntry(0, $18, $08, 0, 0, 3, 0, $0B)
-    %spritemapEntry(0, $20, $08, 0, 0, 3, 0, $0C)
-    %spritemapEntry(0, $28, $08, 0, 0, 3, 0, $0D)
-    %spritemapEntry(0, $30, $08, 0, 0, 3, 0, $0E)
-    %spritemapEntry(0, $38, $08, 0, 0, 3, 0, $0F)
-
-    ; Row 2
-    %spritemapEntry(0, $00, $10, 0, 0, 3, 0, $10)
-    %spritemapEntry(0, $08, $10, 0, 0, 3, 0, $11)
-    %spritemapEntry(0, $10, $10, 0, 0, 3, 0, $12)
-    %spritemapEntry(0, $18, $10, 0, 0, 3, 0, $13)
-    %spritemapEntry(0, $20, $10, 0, 0, 3, 0, $14)
-    %spritemapEntry(0, $28, $10, 0, 0, 3, 0, $15)
-    %spritemapEntry(0, $30, $10, 0, 0, 3, 0, $16)
-    %spritemapEntry(0, $38, $10, 0, 0, 3, 0, $17)
-
-    ; Row 3
-    %spritemapEntry(0, $00, $18, 0, 0, 3, 0, $18)
-    %spritemapEntry(0, $08, $18, 0, 0, 3, 0, $19)
-    %spritemapEntry(0, $10, $18, 0, 0, 3, 0, $1A)
-    %spritemapEntry(0, $18, $18, 0, 0, 3, 0, $1B)
-    %spritemapEntry(0, $20, $18, 0, 0, 3, 0, $1C)
-    %spritemapEntry(0, $28, $18, 0, 0, 3, 0, $1D)
-    %spritemapEntry(0, $30, $18, 0, 0, 3, 0, $1E)
-    %spritemapEntry(0, $38, $18, 0, 0, 3, 0, $1F)
 
 ;-------------------------------------------------------------------------------
 ; Prevent player-renderer code/data from overflowing bank A4
@@ -464,3 +471,16 @@ CrocomirePlayer_OAMLegTiles:
     incbin "../data/CrocomirePlayer_OAMLegs.bin"
 
 warnpc $AE0000
+
+;===============================================================================
+; CROCOMIRE PLAYER FULL STATIC GRAPHICS
+; Iteration 6
+; Bank B8 is free for this prototype asset
+;===============================================================================
+
+org $B88000
+
+CrocomirePlayer_FullStaticTiles:
+    incbin "../data/CrocomirePlayer_FullStatic.bin"
+
+warnpc $B90000
