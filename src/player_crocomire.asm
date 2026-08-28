@@ -80,7 +80,7 @@ CrocomirePlayer_Render:
     SEC
     SBC.W Layer1XPosition
     CLC
-    ADC.W #$006D          ; $50 - 3
+    ADC.W #$002D          ; $50 - 3
     STA.B DP_Temp14
 
     LDA.W SamusYPosition
@@ -154,7 +154,7 @@ CrocomirePlayer_Render:
     SEC
     SBC.W Layer1XPosition
     CLC
-    ADC.W #$0035
+    ADC.W #$FFF5
     STA.B DP_Temp14
 
     LDA.W SamusYPosition
