@@ -1,6 +1,6 @@
 ;===============================================================================
 ; CROCOMIRE PLAYER RENDERER
-; Prototype v0.004
+; Prototype v0.0059 PROGRESS - isolate three suspect OAM pieces from IT1
 ;
 ; Included immediately after bank_A4.asm.
 ; Bank A4 free space begins at $A4F6C0.
@@ -18,6 +18,15 @@
 CrocomirePlayer_FacingLeft      = $0000
 CrocomirePlayer_FacingRight     = $0001
 CrocomirePlayer_WalkFrameCount  = $000C
+
+; Frames to wait after detecting a new room before queuing the VRAM load.
+; See PauseMenu_UnusedAnimationTimer0731 below for why this exists.
+CrocomirePlayer_SettleFrames    = $0008
+
+; Frame counter reuses PauseMenu_UnusedAnimationTimer0731 directly - an
+; abandoned pause-menu RAM cell (slot 5 of an animation-timer table,
+; explicitly marked "Unused" and only ever STZ'd at boot/pause-open, never
+; touched during GameState $0008 gameplay) - as a scratch frame counter.
 
 
 ;-------------------------------------------------------------------------------
@@ -46,6 +55,22 @@ CrocomirePlayer_Render:
     ;
     ; Important:
     ; Do NOT update the stored RoomPointer during the door transition.
+    ;
+    ; Wait CrocomirePlayer_SettleFrames frames after a new room is detected
+    ; before actually queuing the VRAM load.
+    ;
+    ; Bug found 2026-09-05: on the very first room after booting the ROM
+    ; (before any door has been used), this load shares the frame with the
+    ; game's own much larger initial VRAM setup (Samus tiles, HUD, room
+    ; tileset, etc). Our transfer is queued through the same VRAMWriteStack
+    ; as everything else, and on that one specific frame there's enough
+    ; competing traffic that it can be processed past whatever the engine's
+    ; per-frame DMA budget allows, silently truncating our graphics (the
+    ; recovered tail tip - the last, smallest tiles in the transfer - never
+    ; arrives in VRAM, and shows leftover boot-time VRAM garbage instead).
+    ; Every later room change works fine because by then the frame is no
+    ; longer that congested. Waiting a handful of frames sidesteps the
+    ; problem entirely instead of trying to win the race every time.
     ;===========================================================================
 
     LDA.W GameState
@@ -54,8 +79,18 @@ CrocomirePlayer_Render:
 
     LDA.W RoomPointer
     CMP.W StartSamusRAM_Unused0A02
-    BEQ .crocomireGraphicsDone
+    BNE .roomChangeDetected
+    BRA .crocomireGraphicsDone
 
+  .roomChangeDetected:
+    LDA.W PauseMenu_UnusedAnimationTimer0731
+    INC A
+    STA.W PauseMenu_UnusedAnimationTimer0731
+    CMP.W #CrocomirePlayer_SettleFrames
+    BMI .crocomireGraphicsDone
+
+    STZ.W PauseMenu_UnusedAnimationTimer0731
+    LDA.W RoomPointer
     STA.W StartSamusRAM_Unused0A02
     JSR.W CrocomirePlayer_QueueTestTiles
 
@@ -101,22 +136,26 @@ CrocomirePlayer_Render:
     ;---------------------------------------------------------------------------
     ; Shared Y origin
     ;
-    ; Keep the proven vertical reference for this first 80% test.
+    ; Aligns the composite's feet (the bottom edge of the spritemap's bounding
+    ; box, 96px / $60 below its own top-left origin) with Samus's own feet
+    ; (SamusYPosition + SamusYRadius), instead of an empirically-tuned offset.
     ;---------------------------------------------------------------------------
 
     LDA.W SamusYPosition
     CLC
     ADC.W SamusYRadius
     SEC
-    SBC.W #$002C
-    SEC
     SBC.W Layer1YPosition
     SEC
-    SBC.W #$004B
+    SBC.W #$0060
     STA.B DP_Temp12
 
     ;---------------------------------------------------------------------------
-    ; Body - sprite palette 6
+    ; v0.0055 IT1 - merged Crocomire composite
+    ;
+    ; Body and limb palettes have the same visible colours, so both layers are
+    ; merged into one sprite raster. This removes overlapping OAM pieces and
+    ; reduces per-scanline OBJ pressure.
     ;---------------------------------------------------------------------------
 
     STZ.B DP_Temp00
@@ -124,21 +163,28 @@ CrocomirePlayer_Render:
     LDA.W #$0C00
     STA.B DP_Temp03
 
-    LDY.W #CrocomirePlayer80_BodySpritemap
-    JSL.L AddSpritemapToOAM_WithBaseTileNumber_8B22
-
     ;---------------------------------------------------------------------------
-    ; Arm + legs - sprite palette 7
+    ; Face the same way Samus is currently facing.
+    ;
+    ; PoseXDirection ($0A1E): $08 = facing right, $04 = facing left. It's the
+    ; game's own already-resolved facing signal (set from the per-Pose
+    ; PoseDefinitions.XDirection table whenever Pose changes), not something
+    ; we need to derive ourselves.
+    ;
+    ; The composite artwork faces left natively, so mirror it (spritemap
+    ; entries with x-flip set and x-offsets mirrored around the same bounding
+    ; box) only when Samus is facing right.
     ;---------------------------------------------------------------------------
 
-    STZ.B DP_Temp00
+    LDY.W #CrocomirePlayer80v55_CompositeSpritemap
+    LDA.W PoseXDirection
+    AND.W #$00FF
+    CMP.W #$0008
+    BNE .render
+    LDY.W #CrocomirePlayer80v55_CompositeSpritemap_FacingRight
 
-    LDA.W #$0E00
-    STA.B DP_Temp03
-
-    LDY.W #CrocomirePlayer80_LimbsSpritemap
+  .render:
     JSL.L AddSpritemapToOAM_WithBaseTileNumber_8B22
-
 
     PLB
     PLP
@@ -436,8 +482,8 @@ CrocomirePlayer_FullBodySpritemap:
 ; Prevent player-renderer code/data from overflowing bank A4
 ;-------------------------------------------------------------------------------
 
-CrocomirePlayer80_BodySpritemap:
-    dw $0023
+CrocomirePlayer80v55_CompositeSpritemap:
+    dw $0021
     %spritemapEntry(1, $10, $00, 0, 0, 3, 0, $00)
     %spritemapEntry(1, $20, $00, 0, 0, 3, 0, $02)
     %spritemapEntry(1, $30, $00, 0, 0, 3, 0, $04)
@@ -447,48 +493,91 @@ CrocomirePlayer80_BodySpritemap:
     %spritemapEntry(1, $20, $10, 0, 0, 3, 0, $0C)
     %spritemapEntry(1, $30, $10, 0, 0, 3, 0, $0E)
     %spritemapEntry(1, $40, $10, 0, 0, 3, 0, $20)
-    %spritemapEntry(1, $50, $10, 0, 0, 3, 0, $22)
-    %spritemapEntry(1, $00, $20, 0, 0, 3, 0, $24)
-    %spritemapEntry(1, $10, $20, 0, 0, 3, 0, $26)
-    %spritemapEntry(1, $20, $20, 0, 0, 3, 0, $28)
-    %spritemapEntry(1, $30, $20, 0, 0, 3, 0, $2A)
-    %spritemapEntry(1, $40, $20, 0, 0, 3, 0, $2C)
-    %spritemapEntry(1, $50, $20, 0, 0, 3, 0, $2E)
-    %spritemapEntry(1, $00, $30, 0, 0, 3, 0, $40)
-    %spritemapEntry(1, $10, $30, 0, 0, 3, 0, $42)
-    %spritemapEntry(1, $20, $30, 0, 0, 3, 0, $44)
-    %spritemapEntry(1, $30, $30, 0, 0, 3, 0, $46)
-    %spritemapEntry(1, $40, $30, 0, 0, 3, 0, $48)
-    %spritemapEntry(1, $00, $40, 0, 0, 3, 0, $4A)
-    %spritemapEntry(1, $10, $40, 0, 0, 3, 0, $4C)
-    %spritemapEntry(1, $20, $40, 0, 0, 3, 0, $4E)
-    %spritemapEntry(1, $30, $40, 0, 0, 3, 0, $60)
-    %spritemapEntry(1, $40, $40, 0, 0, 3, 0, $62)
-    %spritemapEntry(1, $50, $40, 0, 0, 3, 0, $64)
-    %spritemapEntry(1, $60, $40, 0, 0, 3, 0, $66)
-    %spritemapEntry(1, $00, $50, 0, 0, 3, 0, $68)
-    %spritemapEntry(1, $10, $50, 0, 0, 3, 0, $6A)
-    %spritemapEntry(1, $20, $50, 0, 0, 3, 0, $6C)
-    %spritemapEntry(1, $30, $50, 0, 0, 3, 0, $6E)
-    %spritemapEntry(1, $40, $50, 0, 0, 3, 0, $80)
-    %spritemapEntry(1, $50, $50, 0, 0, 3, 0, $82)
-    %spritemapEntry(1, $60, $50, 0, 0, 3, 0, $84)
+    %spritemapEntry(1, $00, $20, 0, 0, 3, 0, $22)
+    %spritemapEntry(1, $10, $20, 0, 0, 3, 0, $24)
+    %spritemapEntry(1, $20, $20, 0, 0, 3, 0, $26)
+    %spritemapEntry(1, $30, $20, 0, 0, 3, 0, $28)
+    %spritemapEntry(1, $40, $20, 0, 0, 3, 0, $2A)
+    %spritemapEntry(1, $50, $20, 0, 0, 3, 0, $2C)
+    %spritemapEntry(1, $00, $30, 0, 0, 3, 0, $2E)
+    %spritemapEntry(1, $10, $30, 0, 0, 3, 0, $40)
+    %spritemapEntry(1, $20, $30, 0, 0, 3, 0, $42)
+    %spritemapEntry(1, $30, $30, 0, 0, 3, 0, $44)
+    %spritemapEntry(1, $40, $30, 0, 0, 3, 0, $46)
+    %spritemapEntry(1, $00, $40, 0, 0, 3, 0, $48)
+    %spritemapEntry(1, $10, $40, 0, 0, 3, 0, $4A)
+    %spritemapEntry(1, $20, $40, 0, 0, 3, 0, $4C)
+    %spritemapEntry(1, $30, $40, 0, 0, 3, 0, $4E)
+    %spritemapEntry(1, $40, $40, 0, 0, 3, 0, $60)
+    %spritemapEntry(1, $50, $40, 0, 0, 3, 0, $62)
+    %spritemapEntry(1, $00, $50, 0, 0, 3, 0, $64)
+    %spritemapEntry(1, $10, $50, 0, 0, 3, 0, $66)
+    %spritemapEntry(1, $20, $50, 0, 0, 3, 0, $68)
+    %spritemapEntry(1, $30, $50, 0, 0, 3, 0, $6A)
+    %spritemapEntry(1, $40, $50, 0, 0, 3, 0, $6C)
+    %spritemapEntry(1, $50, $50, 0, 0, 3, 0, $6E)
 
-CrocomirePlayer80_LimbsSpritemap:
-    dw $000D
-    %spritemapEntry(1, $20, $30, 0, 0, 3, 0, $86)
-    %spritemapEntry(1, $30, $30, 0, 0, 3, 0, $88)
-    %spritemapEntry(1, $40, $30, 0, 0, 3, 0, $8A)
-    %spritemapEntry(1, $00, $40, 0, 0, 3, 0, $8C)
-    %spritemapEntry(1, $10, $40, 0, 0, 3, 0, $8E)
-    %spritemapEntry(1, $20, $40, 0, 0, 3, 0, $A0)
-    %spritemapEntry(1, $30, $40, 0, 0, 3, 0, $A2)
-    %spritemapEntry(1, $40, $40, 0, 0, 3, 0, $A4)
-    %spritemapEntry(1, $00, $50, 0, 0, 3, 0, $A6)
-    %spritemapEntry(1, $10, $50, 0, 0, 3, 0, $A8)
-    %spritemapEntry(1, $20, $50, 0, 0, 3, 0, $AA)
-    %spritemapEntry(1, $30, $50, 0, 0, 3, 0, $AC)
-    %spritemapEntry(1, $40, $50, 0, 0, 3, 0, $AE)
+    ;---------------------------------------------------------------------------
+    ; Recovered tail tip
+    ;
+    ; Lost when the body+limb layers were merged into one raster (v0.0055 IT1):
+    ; the merge only kept 32 of the original 48 blocks, silently dropping the
+    ; tail's outermost segment. Restored here from the original unmerged
+    ; CrocomirePlayer_80pct.bin tiles $84/$85 (screen position x=$60,y=$50).
+    ;
+    ; Placed at tile $80 - reusing free space already inside the existing
+    ; 192-tile / $1800-byte VRAM budget - instead of appending past it.
+    ; Appending past tile $BF (tried first) silently corrupted whatever sits
+    ; next in VRAM after this graphics block, since the DMA queued by
+    ; CrocomirePlayer_QueueTestTiles below is sized to exactly that budget.
+    ;---------------------------------------------------------------------------
+
+    %spritemapEntry(1, $60, $50, 0, 0, 3, 0, $80)
+
+;-------------------------------------------------------------------------------
+; Facing-right mirror of CrocomirePlayer80v55_CompositeSpritemap.
+;
+; Generated from the entry above: x-offsets mirrored around the shared 112px
+; ($70) bounding box (new_x = $60 - old_x), x-flip set, same tile numbers -
+; the SNES OBJ hardware handles the subtile swap for 16x16 sprites on its
+; own, so no new graphics data is needed, only re-flowed coordinates.
+;-------------------------------------------------------------------------------
+
+CrocomirePlayer80v55_CompositeSpritemap_FacingRight:
+    dw $0021
+    %spritemapEntry(1, $50, $00, 0, 1, 3, 0, $00)
+    %spritemapEntry(1, $40, $00, 0, 1, 3, 0, $02)
+    %spritemapEntry(1, $30, $00, 0, 1, 3, 0, $04)
+    %spritemapEntry(1, $20, $00, 0, 1, 3, 0, $06)
+    %spritemapEntry(1, $60, $10, 0, 1, 3, 0, $08)
+    %spritemapEntry(1, $50, $10, 0, 1, 3, 0, $0A)
+    %spritemapEntry(1, $40, $10, 0, 1, 3, 0, $0C)
+    %spritemapEntry(1, $30, $10, 0, 1, 3, 0, $0E)
+    %spritemapEntry(1, $20, $10, 0, 1, 3, 0, $20)
+    %spritemapEntry(1, $60, $20, 0, 1, 3, 0, $22)
+    %spritemapEntry(1, $50, $20, 0, 1, 3, 0, $24)
+    %spritemapEntry(1, $40, $20, 0, 1, 3, 0, $26)
+    %spritemapEntry(1, $30, $20, 0, 1, 3, 0, $28)
+    %spritemapEntry(1, $20, $20, 0, 1, 3, 0, $2A)
+    %spritemapEntry(1, $10, $20, 0, 1, 3, 0, $2C)
+    %spritemapEntry(1, $60, $30, 0, 1, 3, 0, $2E)
+    %spritemapEntry(1, $50, $30, 0, 1, 3, 0, $40)
+    %spritemapEntry(1, $40, $30, 0, 1, 3, 0, $42)
+    %spritemapEntry(1, $30, $30, 0, 1, 3, 0, $44)
+    %spritemapEntry(1, $20, $30, 0, 1, 3, 0, $46)
+    %spritemapEntry(1, $60, $40, 0, 1, 3, 0, $48)
+    %spritemapEntry(1, $50, $40, 0, 1, 3, 0, $4A)
+    %spritemapEntry(1, $40, $40, 0, 1, 3, 0, $4C)
+    %spritemapEntry(1, $30, $40, 0, 1, 3, 0, $4E)
+    %spritemapEntry(1, $20, $40, 0, 1, 3, 0, $60)
+    %spritemapEntry(1, $10, $40, 0, 1, 3, 0, $62)
+    %spritemapEntry(1, $60, $50, 0, 1, 3, 0, $64)
+    %spritemapEntry(1, $50, $50, 0, 1, 3, 0, $66)
+    %spritemapEntry(1, $40, $50, 0, 1, 3, 0, $68)
+    %spritemapEntry(1, $30, $50, 0, 1, 3, 0, $6A)
+    %spritemapEntry(1, $20, $50, 0, 1, 3, 0, $6C)
+    %spritemapEntry(1, $10, $50, 0, 1, 3, 0, $6E)
+    %spritemapEntry(1, $00, $50, 0, 1, 3, 0, $80)
 
 warnpc $A50000
 
@@ -520,6 +609,7 @@ warnpc $AE0000
 org $B88000
 
 CrocomirePlayer_FullStaticTiles:
-    incbin "../data/CrocomirePlayer_80pct.bin"
+
+    incbin "../data/CrocomirePlayer_80pct_v0055_it1_composite.bin"
 
 warnpc $B90000

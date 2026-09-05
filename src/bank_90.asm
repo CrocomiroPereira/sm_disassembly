@@ -6793,6 +6793,31 @@ Handle_Samus_Cooldown:
 
 ;;; $AC39: Check if Samus can fire beam ;;;
 Check_if_Samus_Can_Fire_Beam:
+    ; Crocomire player prototype: Samus's own body/HUD are hidden while
+    ; playing as Crocomire (src/player_crocomire.asm), but nothing else
+    ; stopped her from still firing - shots spawned and drew normally at
+    ; her real, now-invisible position, appearing as a detached stray
+    ; sprite near the visible Crocomire body. Disable firing during normal
+    ; gameplay (GameState $0008, same condition CrocomirePlayer_Render uses)
+    ; only, so scripted cutscenes that fire on Samus's behalf under a
+    ; different GameState (e.g. the intro) are unaffected.
+    ;
+    ; 2026-09-05 regression note: an earlier unconditional version of this
+    ; disable softlocked the intro cutscene, which fires a scripted missile
+    ; while GameState != $0008.
+    PHP
+    REP #$20
+    LDA.W GameState
+    CMP.W #$0008
+    BEQ .crocomireFireDisabled
+    PLP
+    BRA .beamFireAllowed
+
+  .crocomireFireDisabled:
+    PLP
+    BRA .noFire
+
+  .beamFireAllowed:
     LDA.W SamusProjectile_ProjectileCounter                              ;90AC39;
     CMP.W #$0005                                                         ;90AC3C;
     BPL .noFire                                                          ;90AC3F;
@@ -6818,6 +6843,22 @@ Check_if_Samus_Can_Fire_Missile:
 ;;     Carry: Set if Samus can fire (super) missile
 
 ; Increments projectile counter(!)
+
+    ; Crocomire player prototype: see Check_if_Samus_Can_Fire_Beam above.
+    ; Same GameState-gated disable, for missiles/super missiles.
+    PHP
+    REP #$20
+    LDA.W GameState
+    CMP.W #$0008
+    BEQ .crocomireFireDisabled
+    PLP
+    BRA .missileFireAllowed
+
+  .crocomireFireDisabled:
+    PLP
+    BRA .noFire
+
+  .missileFireAllowed:
     LDA.W SelectedHUDItem                                                ;90AC5A;
     CMP.W #$0002                                                         ;90AC5D;
     BEQ .superMissile                                                    ;90AC60;
