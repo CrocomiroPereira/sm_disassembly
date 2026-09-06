@@ -1512,18 +1512,7 @@ ProcessEnemySet_LoadPalettesAndEnemyLoadingData:
     PHX                                                                  ;A08D64;
     PHY                                                                  ;A08D65;
     STZ.W EnemyTileData_StackPointer                                     ;A08D66;
-    ; Was $0800 (tile $80/128) - the end of vanilla Samus's own OBJ tile
-    ; budget, which is exactly where per-room enemy graphics start getting
-    ; allocated. Our player composite (player_crocomire.asm) now occupies
-    ; the full 192 tiles ($00-$BF) of that same budget, including the
-    ; recovered tail tip and walk-cycle leg tiles added past the original
-    ; 128-tile boundary - so any room enemy needing its own OBJ graphics
-    ; (confirmed with Landing Site's ship, and a "Mini Crocomire" test
-    ; enemy) was getting allocated starting at $0800, directly overlapping
-    ; and stomping the back third of our composite (and vice versa).
-    ; Bumped to $0C00 (tile $C0/192) to reserve our composite's full,
-    ; current footprint globally, in every room, rather than shrinking it.
-    LDA.W #$0C00                                                         ;A08D69;
+    LDA.W #$0800                                                         ;A08D69;
     STA.B DP_Temp1E                                                      ;A08D6C;
     LDA.W #$0000                                                         ;A08D6E;
     STA.L EnemyGFXData_IDs                                               ;A08D71;
@@ -12277,25 +12266,25 @@ EnemyHeaders_Zoomer:                                                     ;A0DCFF
     %vulnerabilities(EnemyVulnerabilities_Viola_Yard_HZoomer_Zeela_Sova_Zoomer),
     %name(EnemyName_Zoomer))
 
-; Mini Crocomire test enemy (Landing Site) - draws the player's own composite
-; spritemap (player_crocomire.asm, bank $A4) instead of loading unique
-; graphics of its own; see InitAI_MiniCrocomire there for why.
-EnemyHeaders_MiniCrocomire:
+; TELEPATHY test enemy (Landing Site) - identical to a plain Zoomer except
+; touching it triggers TELEPATHY (EnemyTouch_TriggerTelepathy below) instead
+; of dealing normal contact damage.
+EnemyHeaders_TelepathyZoomer:
     %EnemyHeader(\
-    %tileDataSize(0),
+    %tileDataSize($0600),
     %palette(Palette_Zoomer),
-    %health(60),
-    %damage(20),
-    %width(48),
-    %height(56),
-    %bank(InitAI_MiniCrocomire>>16),
+    %health(15),
+    %damage(5),
+    %width(8),
+    %height(8),
+    %bank(InitAI_Zoomer_MZoomer>>16),
     %hurtAITime(0),
-    %cry(0),
+    %cry($0023),
     %bossID(0),
-    %initAI(InitAI_MiniCrocomire),
+    %initAI(InitAI_Zoomer_MZoomer),
     %parts(1),
-    %unused(0),
-    %mainAI(MainAI_MiniCrocomire),
+    %unused(1),
+    %mainAI(MainAI_Crawlers),
     %grappleAI(Common_GrappleAI_KillEnemy),
     %hurtAI(RTL_A3804C),
     %frozenAI(Common_NormalEnemyFrozenAI),
@@ -12303,7 +12292,7 @@ EnemyHeaders_MiniCrocomire:
     %deathAnimation(0),
     %powerBombReaction(0),
     %variantIndex(0),
-    %enemyTouch(Common_NormalEnemyTouchAI),
+    %enemyTouch(EnemyTouch_TriggerTelepathy),
     %enemyShot(Common_NormalEnemyShotAI),
     %spritemap(0),
     %tileData(Tiles_Zoomer),
@@ -12311,6 +12300,65 @@ EnemyHeaders_MiniCrocomire:
     %drops(EnemyDropChances_Zoomer),
     %vulnerabilities(EnemyVulnerabilities_Viola_Yard_HZoomer_Zeela_Sova_Zoomer),
     %name(0))
+
+; TELEPATHY test enemy, take 2: the Zoomer version crashed on touch (cause
+; not yet found); Wavers with the exact same EnemyTouch_TriggerTelepathy
+; hook confirmed working (hitbox correctly followed them), so switching to
+; those instead of debugging Zoomer's crash further for now.
+EnemyHeaders_TelepathyWaver:
+    %EnemyHeader(\
+    %tileDataSize($0600),
+    %palette(Palette_Waver),
+    %health(30),
+    %damage(10),
+    %width(8),
+    %height(8),
+    %bank(InitAI_Waver>>16),
+    %hurtAITime(0),
+    %cry($0047),
+    %bossID(0),
+    %initAI(InitAI_Waver),
+    %parts(1),
+    %unused(0),
+    %mainAI(MainAI_Waver),
+    %grappleAI(Common_GrappleAI_KillEnemy),
+    %hurtAI(RTL_A3804C),
+    %frozenAI(Common_NormalEnemyFrozenAI),
+    %timeIsFrozen(0),
+    %deathAnimation(0),
+    %powerBombReaction(0),
+    %variantIndex(0),
+    %enemyTouch(EnemyTouch_TriggerTelepathy),
+    %enemyShot(Common_NormalEnemyShotAI),
+    %spritemap(0),
+    %tileData(Tiles_Waver),
+    %layer(5),
+    %drops(EnemyDropChances_Waver),
+    %vulnerabilities(EnemyVulnerabilities_Default),
+    %name(0))
+
+;;; Trigger TELEPATHY: retarget Samus's hitbox onto this enemy and freeze
+;;; Croc, instead of the normal contact damage ;;;
+EnemyTouch_TriggerTelepathy:
+;; Reads: EnemyIndex (this enemy's byte offset into the Enemy struct)
+;; Writes: neverRead0AA4 (TelepathyActive flag), neverRead0E48
+;;         (TelepathyEnemyIndex - which Enemy struct offset to track)
+;;
+;; player_crocomire.asm's CrocomirePlayer_Render polls these every frame:
+;; while TelepathyActive is set, it stops updating Croc's screen position
+;; from Samus's own position (freezing Croc in place) and instead copies
+;; this enemy's position into SamusXPosition/YPosition each frame, so
+;; Samus's real (invisible) hitbox tracks the enemy instead.
+;;
+;; Movement input isn't redirected to the enemy yet - it still runs its own
+;; autonomous MainAI_Crawlers behaviour. Actually walking/climbing it under
+;; player control, and how TELEPATHY ends, are follow-up work.
+    LDX.W EnemyIndex
+    LDA.W #$0001
+    STA.W neverRead0AA4
+    TXA
+    STA.W neverRead0E48
+    RTL
 
 EnemyHeaders_MZoomer:                                                    ;A0DD3F;
     %EnemyHeader(\

@@ -9234,11 +9234,13 @@ MainASM_ScrollingSkyLand:
     JSR.W CheckRespawnLandingSiteMiniCrocomire
     RTS                                                                  ;8FC11A;
 
-; Keeps the Mini Crocomire test enemy under the ship in Landing Site (see
-; EnemyPopulations_LandingSite_0_1_2, bank_A1.asm) coming back after it's
-; killed, instead of it staying dead for the rest of the room visit - so it
-; can be used as a repeatable test target. Gated on RoomPointer so the other
-; room sharing this same MainASM (the power bomb room, $93AA) is unaffected.
+; Keeps a pair of TELEPATHY-triggering Wavers under the ship in Landing Site
+; (see EnemyPopulations_LandingSite_0_1_2, bank_A1.asm) topped up after
+; either is killed, instead of staying dead for the rest of the room visit -
+; so they can be used as repeatable test targets. Gated on RoomPointer so
+; the other room sharing this same MainASM (the power bomb room, $93AA) is
+; unaffected. Spawns at most one per call (one per frame), which tops back
+; up to 2 within a couple of frames of either dying.
 CheckRespawnLandingSiteMiniCrocomire:
     PHP
     REP #$30
@@ -9247,27 +9249,44 @@ CheckRespawnLandingSiteMiniCrocomire:
     BNE .return
 
     LDY.W #$0000
+    STZ.B DP_Temp16          ; count of active TelepathyWavers found
   .scanLoop:
     LDA.W ActiveEnemyIndices,Y
     CMP.W #$FFFF
-    BEQ .notFound
+    BEQ .doneScanning
     TAX
     LDA.W Enemy.ID,X
-    CMP.W #EnemyHeaders_MiniCrocomire
-    BEQ .return
+    CMP.W #EnemyHeaders_TelepathyWaver
+    BNE .next
+    INC.B DP_Temp16
+
+  .next:
     INY
     INY
     BRA .scanLoop
 
-  .notFound:
-    LDX.W #.respawnData
+  .doneScanning:
+    LDA.B DP_Temp16
+    BEQ .spawnA
+    CMP.W #$0001
+    BEQ .spawnB
+    BRA .return
+
+  .spawnA:
+    LDX.W #.respawnDataA
+    BRA .doSpawn
+
+  .spawnB:
+    LDX.W #.respawnDataB
+
+  .doSpawn:
     JSL.L SpawnEnemy
 
   .return:
     PLP
     RTS
 
-  .respawnData:
+  .respawnDataA:
 ;      /-------------------------------------- Enemy ID
 ;      |     /-------------------------------- X position
 ;      |     |     /-------------------------- Y position
@@ -9276,8 +9295,12 @@ CheckRespawnLandingSiteMiniCrocomire:
 ;      |     |     |     |     |     /-------- Extra properties
 ;      |     |     |     |     |     |     /-- Parameters 1/2
 ;      |     |     |     |     |     |     |
-    dw EnemyHeaders_MiniCrocomire
-    dw $0480,$04C8,InstList_MiniCrocomire_Initial,$2800,$0000,$0000,$0000
+    dw EnemyHeaders_TelepathyWaver
+    dw $02F0,$04C8,$0000,$2800,$0000,$0001,$0000
+
+  .respawnDataB:
+    dw EnemyHeaders_TelepathyWaver
+    dw $0330,$04C8,$0000,$2800,$0000,$0001,$0000
 
 
 ;;; $C11B: Main ASM: scrolling sky ocean ;;;

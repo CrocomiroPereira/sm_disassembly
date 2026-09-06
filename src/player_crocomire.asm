@@ -189,6 +189,64 @@ CrocomirePlayer_Render:
     ;===========================================================================
 
     ;---------------------------------------------------------------------------
+    ; TELEPATHY
+    ;
+    ; While active (neverRead0AA4, set by EnemyTouch_TriggerTelepathy in
+    ; bank_A0.asm when Samus touches a TelepathyZoomer), Croc freezes at
+    ; whatever screen position he was already standing at, and Samus's real
+    ; (invisible) position is synced to the tracked enemy every frame, so
+    ; her actual hitbox/collision follows it instead of Croc's frozen body.
+    ; Ends the moment that enemy walks back within Croc's frozen footprint.
+    ;
+    ; neverRead0E48 holds the tracked enemy's Enemy-struct byte offset.
+    ; PauseMenu_UnusedAnimationFrame/_UnusedAnimationMode (only otherwise
+    ; touched by pause-menu setup, never during normal gameplay) hold
+    ; Croc's frozen screen X/Y - refreshed every frame TELEPATHY is NOT
+    ; active, so they're always wherever Croc last stood the moment it
+    ; triggers.
+    ;---------------------------------------------------------------------------
+
+    LDA.W neverRead0AA4
+    BEQ .noTelepathy
+
+    LDX.W neverRead0E48
+    LDA.W Enemy.XPosition,X
+    STA.W SamusXPosition
+    SEC
+    SBC.W PauseMenu_UnusedAnimationFrame
+    BPL +
+    EOR.W #$FFFF
+    INC A
++   CMP.W #$0010
+    BPL .stillActive
+
+    LDA.W Enemy.YPosition,X
+    STA.W SamusYPosition
+    SEC
+    SBC.W PauseMenu_UnusedAnimationMode
+    BPL +
+    EOR.W #$FFFF
+    INC A
++   CMP.W #$0018
+    BPL .stillActive
+
+    STZ.W neverRead0AA4
+    BRA .useFrozenOrigin
+
+  .stillActive:
+    LDA.W Enemy.YPosition,X
+    STA.W SamusYPosition
+
+  .useFrozenOrigin:
+    LDA.W PauseMenu_UnusedAnimationFrame
+    STA.B DP_Temp14
+    LDA.W PauseMenu_UnusedAnimationMode
+    STA.B DP_Temp12
+    BRA .originDone
+
+  .noTelepathy:
+
+    ;---------------------------------------------------------------------------
     ; Shared X origin
     ;
     ; Current centered full-size body origin was -11 px.
@@ -202,6 +260,7 @@ CrocomirePlayer_Render:
     CLC
     ADC.W #$FFF0
     STA.B DP_Temp14
+    STA.W PauseMenu_UnusedAnimationFrame
 
     ;---------------------------------------------------------------------------
     ; Shared Y origin
@@ -219,6 +278,9 @@ CrocomirePlayer_Render:
     SEC
     SBC.W #$0060
     STA.B DP_Temp12
+    STA.W PauseMenu_UnusedAnimationMode
+
+  .originDone:
 
     ;---------------------------------------------------------------------------
     ; v0.0055 IT1 - merged Crocomire composite
@@ -614,137 +676,6 @@ CrocomirePlayer_QueueTestTiles:
 
     RTS
 
-
-;-------------------------------------------------------------------------------
-; Mini Crocomire test enemy (Landing Site)
-;
-; Draws our own composite spritemap - the exact same one the player uses -
-; through the game's ordinary enemy-drawing system, instead of the player's
-; hijacked render path. Works because the graphics are already resident in
-; VRAM/CGRAM every single frame regardless of room (the player's own render
-; runs unconditionally), so this enemy needs no graphics load of its own -
-; it just points at the same spritemap and lets the standard per-enemy
-; drawing dispatch (WriteEnemyOAM_IfNotFrozenOrInvincibleFrame, bank_A0.asm)
-; place it at its own (X,Y) instead of Samus's.
-;
-; SpawnEnemy_AlwaysSucceed (bank_A0.asm) already copies the population
-; entry's initParam straight into Enemy.instList, and defaults
-; Enemy.GFXOffset to 0 - which matches our composite's own tile numbering,
-; since we register no separate EnemySets graphics load for this header.
-; The one thing it doesn't default the way we need is Enemy.palette
-; (defaults to 0, but our composite's colours live in CGRAM palette 6) -
-; InitAI just forces that one field.
-;
-; Must live in the same bank as CrocomirePlayer80v55_CompositeSpritemap
-; (bank $A4, via EnemyHeaders_MiniCrocomire's %bank field) - the drawing
-; dispatch sets the data bank register from that field before resolving
-; Enemy.spritemap as a bank-relative pointer.
-;-------------------------------------------------------------------------------
-
-InitAI_MiniCrocomire:
-    LDX.W EnemyIndex
-    LDA.W #$0C00
-    STA.W Enemy.palette,X
-    RTL
-
-MainAI_MiniCrocomire:
-    RTL
-
-; Two-frame shuffle: each frame is the full body composite (31 entries)
-; plus one leg-overlay pose (8 entries, from the player's own walk-cycle
-; tables) merged into a single spritemap, since the enemy-drawing dispatch
-; only tracks one Enemy.spritemap pointer at a time (no separate overlay
-; layer like the player's own two-JSL draw). Instruction_Common_GotoY loops
-; it forever - same primitive used by every other looping enemy animation.
-InstList_MiniCrocomire_Initial:
-    dw $0020,MiniCrocomire_Spritemap_Frame0
-    dw $0020,MiniCrocomire_Spritemap_Frame1
-    dw Instruction_Common_GotoY
-    dw InstList_MiniCrocomire_Initial
-
-MiniCrocomire_Spritemap_Frame0:
-    dw $0027
-    %spritemapEntry(0, $04, $56, 0, 0, 3, 0, $82)
-    %spritemapEntry(0, $0C, $56, 0, 0, 3, 0, $83)
-    %spritemapEntry(0, $14, $56, 0, 0, 3, 0, $84)
-    %spritemapEntry(0, $1C, $56, 0, 0, 3, 0, $85)
-    %spritemapEntry(0, $40, $56, 0, 0, 3, 0, $82)
-    %spritemapEntry(0, $48, $56, 0, 0, 3, 0, $83)
-    %spritemapEntry(0, $50, $56, 0, 0, 3, 0, $84)
-    %spritemapEntry(0, $58, $56, 0, 0, 3, 0, $85)
-    %spritemapEntry(1, $10, $00, 0, 0, 3, 0, $00)
-    %spritemapEntry(1, $20, $00, 0, 0, 3, 0, $02)
-    %spritemapEntry(1, $30, $00, 0, 0, 3, 0, $04)
-    %spritemapEntry(1, $40, $00, 0, 0, 3, 0, $06)
-    %spritemapEntry(1, $00, $10, 0, 0, 3, 0, $08)
-    %spritemapEntry(1, $10, $10, 0, 0, 3, 0, $0A)
-    %spritemapEntry(1, $20, $10, 0, 0, 3, 0, $0C)
-    %spritemapEntry(1, $30, $10, 0, 0, 3, 0, $0E)
-    %spritemapEntry(1, $40, $10, 0, 0, 3, 0, $20)
-    %spritemapEntry(1, $00, $20, 0, 0, 3, 0, $22)
-    %spritemapEntry(1, $10, $20, 0, 0, 3, 0, $24)
-    %spritemapEntry(1, $20, $20, 0, 0, 3, 0, $26)
-    %spritemapEntry(1, $30, $20, 0, 0, 3, 0, $28)
-    %spritemapEntry(1, $40, $20, 0, 0, 3, 0, $2A)
-    %spritemapEntry(1, $50, $20, 0, 0, 3, 0, $2C)
-    %spritemapEntry(1, $00, $30, 0, 0, 3, 0, $2E)
-    %spritemapEntry(1, $10, $30, 0, 0, 3, 0, $40)
-    %spritemapEntry(1, $20, $30, 0, 0, 3, 0, $42)
-    %spritemapEntry(1, $30, $30, 0, 0, 3, 0, $44)
-    %spritemapEntry(1, $40, $30, 0, 0, 3, 0, $46)
-    %spritemapEntry(1, $00, $40, 0, 0, 3, 0, $48)
-    %spritemapEntry(1, $10, $40, 0, 0, 3, 0, $4A)
-    %spritemapEntry(1, $20, $40, 0, 0, 3, 0, $4C)
-    %spritemapEntry(1, $30, $40, 0, 0, 3, 0, $4E)
-    %spritemapEntry(1, $40, $40, 0, 0, 3, 0, $60)
-    %spritemapEntry(1, $50, $40, 0, 0, 3, 0, $62)
-    %spritemapEntry(1, $10, $50, 0, 0, 3, 0, $66)
-    %spritemapEntry(1, $20, $50, 0, 0, 3, 0, $68)
-    %spritemapEntry(1, $30, $50, 0, 0, 3, 0, $6A)
-    %spritemapEntry(1, $40, $50, 0, 0, 3, 0, $6C)
-    %spritemapEntry(1, $60, $50, 0, 0, 3, 0, $80)
-
-MiniCrocomire_Spritemap_Frame1:
-    dw $0027
-    %spritemapEntry(0, $0C, $56, 0, 0, 3, 0, $82)
-    %spritemapEntry(0, $14, $56, 0, 0, 3, 0, $83)
-    %spritemapEntry(0, $1C, $56, 0, 0, 3, 0, $84)
-    %spritemapEntry(0, $24, $56, 0, 0, 3, 0, $85)
-    %spritemapEntry(0, $30, $56, 0, 0, 3, 0, $82)
-    %spritemapEntry(0, $38, $56, 0, 0, 3, 0, $83)
-    %spritemapEntry(0, $40, $56, 0, 0, 3, 0, $84)
-    %spritemapEntry(0, $48, $56, 0, 0, 3, 0, $85)
-    %spritemapEntry(1, $10, $00, 0, 0, 3, 0, $00)
-    %spritemapEntry(1, $20, $00, 0, 0, 3, 0, $02)
-    %spritemapEntry(1, $30, $00, 0, 0, 3, 0, $04)
-    %spritemapEntry(1, $40, $00, 0, 0, 3, 0, $06)
-    %spritemapEntry(1, $00, $10, 0, 0, 3, 0, $08)
-    %spritemapEntry(1, $10, $10, 0, 0, 3, 0, $0A)
-    %spritemapEntry(1, $20, $10, 0, 0, 3, 0, $0C)
-    %spritemapEntry(1, $30, $10, 0, 0, 3, 0, $0E)
-    %spritemapEntry(1, $40, $10, 0, 0, 3, 0, $20)
-    %spritemapEntry(1, $00, $20, 0, 0, 3, 0, $22)
-    %spritemapEntry(1, $10, $20, 0, 0, 3, 0, $24)
-    %spritemapEntry(1, $20, $20, 0, 0, 3, 0, $26)
-    %spritemapEntry(1, $30, $20, 0, 0, 3, 0, $28)
-    %spritemapEntry(1, $40, $20, 0, 0, 3, 0, $2A)
-    %spritemapEntry(1, $50, $20, 0, 0, 3, 0, $2C)
-    %spritemapEntry(1, $00, $30, 0, 0, 3, 0, $2E)
-    %spritemapEntry(1, $10, $30, 0, 0, 3, 0, $40)
-    %spritemapEntry(1, $20, $30, 0, 0, 3, 0, $42)
-    %spritemapEntry(1, $30, $30, 0, 0, 3, 0, $44)
-    %spritemapEntry(1, $40, $30, 0, 0, 3, 0, $46)
-    %spritemapEntry(1, $00, $40, 0, 0, 3, 0, $48)
-    %spritemapEntry(1, $10, $40, 0, 0, 3, 0, $4A)
-    %spritemapEntry(1, $20, $40, 0, 0, 3, 0, $4C)
-    %spritemapEntry(1, $30, $40, 0, 0, 3, 0, $4E)
-    %spritemapEntry(1, $40, $40, 0, 0, 3, 0, $60)
-    %spritemapEntry(1, $50, $40, 0, 0, 3, 0, $62)
-    %spritemapEntry(1, $10, $50, 0, 0, 3, 0, $66)
-    %spritemapEntry(1, $20, $50, 0, 0, 3, 0, $68)
-    %spritemapEntry(1, $30, $50, 0, 0, 3, 0, $6A)
-    %spritemapEntry(1, $40, $50, 0, 0, 3, 0, $6C)
-    %spritemapEntry(1, $60, $50, 0, 0, 3, 0, $80)
 
 
 CrocomirePlayer_TestTileTransfers:
