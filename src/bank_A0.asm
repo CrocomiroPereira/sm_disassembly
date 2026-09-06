@@ -12301,39 +12301,42 @@ EnemyHeaders_TelepathyZoomer:
     %vulnerabilities(EnemyVulnerabilities_Viola_Yard_HZoomer_Zeela_Sova_Zoomer),
     %name(0))
 
-; TELEPATHY test enemy, take 2: the Zoomer version crashed on touch (cause
-; not yet found); Wavers with the exact same EnemyTouch_TriggerTelepathy
-; hook confirmed working (hitbox correctly followed them), so switching to
-; those instead of debugging Zoomer's crash further for now.
-EnemyHeaders_TelepathyWaver:
+; TELEPATHY test enemy, take 3: Zoomer crashed hard on touch, then Wavers
+; ALSO crashed hard on touch (contrary to an earlier, apparently misleading
+; observation that they worked at Terminator) - both attempts share nothing
+; but our own EnemyTouch_TriggerTelepathy/CrocomirePlayer_Render code, which
+; is the more likely actual culprit rather than the specific enemy. Trying
+; Cacatac next (stationary, no movement AI at all, to rule out any
+; interaction with the tracked enemy walking around every frame).
+EnemyHeaders_TelepathyCacatac:
     %EnemyHeader(\
-    %tileDataSize($0600),
-    %palette(Palette_Waver),
-    %health(30),
-    %damage(10),
+    %tileDataSize($0400),
+    %palette(Palette_Cacatac),
+    %health(60),
+    %damage(20),
     %width(8),
     %height(8),
-    %bank(InitAI_Waver>>16),
+    %bank(InitAI_Cacatac>>16),
     %hurtAITime(0),
-    %cry($0047),
+    %cry(0),
     %bossID(0),
-    %initAI(InitAI_Waver),
+    %initAI(InitAI_Cacatac),
     %parts(1),
     %unused(0),
-    %mainAI(MainAI_Waver),
+    %mainAI(MainAI_Cacatac),
     %grappleAI(Common_GrappleAI_KillEnemy),
-    %hurtAI(RTL_A3804C),
+    %hurtAI(RTL_A2804C),
     %frozenAI(Common_NormalEnemyFrozenAI),
     %timeIsFrozen(0),
-    %deathAnimation(0),
+    %deathAnimation(2),
     %powerBombReaction(0),
     %variantIndex(0),
     %enemyTouch(EnemyTouch_TriggerTelepathy),
     %enemyShot(Common_NormalEnemyShotAI),
     %spritemap(0),
-    %tileData(Tiles_Waver),
+    %tileData(Tiles_Cacatac),
     %layer(5),
-    %drops(EnemyDropChances_Waver),
+    %drops(EnemyDropChances_Cacatac),
     %vulnerabilities(EnemyVulnerabilities_Default),
     %name(0))
 
@@ -12341,8 +12344,14 @@ EnemyHeaders_TelepathyWaver:
 ;;; Croc, instead of the normal contact damage ;;;
 EnemyTouch_TriggerTelepathy:
 ;; Reads: EnemyIndex (this enemy's byte offset into the Enemy struct)
-;; Writes: neverRead0AA4 (TelepathyActive flag), neverRead0E48
+;; Writes: neverRead0787 (TelepathyActive flag), neverRead0E48
 ;;         (TelepathyEnemyIndex - which Enemy struct offset to track)
+;;
+;; neverRead0787, not neverRead0AA4: that one's already used by
+;; CrocomirePlayer_HandleLandingShake's own Y-speed tracking (bank_A4.asm) -
+;; sharing it meant jumping (nonzero SamusYSpeed written there every frame)
+;; got misread here as TELEPATHY being active, corrupting Samus's position
+;; and crashing the game on every jump.
 ;;
 ;; player_crocomire.asm's CrocomirePlayer_Render polls these every frame:
 ;; while TelepathyActive is set, it stops updating Croc's screen position
@@ -12353,11 +12362,21 @@ EnemyTouch_TriggerTelepathy:
 ;; Movement input isn't redirected to the enemy yet - it still runs its own
 ;; autonomous MainAI_Crawlers behaviour. Actually walking/climbing it under
 ;; player control, and how TELEPATHY ends, are follow-up work.
+;; Forces 16-bit A/X/Y regardless of the caller's mode - EnemyIndex and the
+;; two flags below are full words, and TXA truncates to 8 bits if X is only
+;; 8 bits wide, corrupting the stored enemy offset for any slot beyond 255
+;; (i.e. any enemy slot past the 4th). That truncation is almost certainly
+;; what was crashing the game on every enemy tried so far: a garbage offset
+;; fed into Enemy.XPosition/YPosition reads back in player_crocomire.asm,
+;; producing a nonsense Samus position.
+    PHP
+    REP #$30
     LDX.W EnemyIndex
     LDA.W #$0001
-    STA.W neverRead0AA4
+    STA.W neverRead0787
     TXA
     STA.W neverRead0E48
+    PLP
     RTL
 
 EnemyHeaders_MZoomer:                                                    ;A0DD3F;

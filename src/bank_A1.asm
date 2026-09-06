@@ -1291,27 +1291,18 @@ EnemyPopulations_LandingSite_0_1_2:
     %extraProperties($0000),
     %speedParams($0000, $0001))
 
-    ; TELEPATHY test enemies - Wavers whose touch triggers TELEPATHY instead
-    ; of contact damage (EnemyHeaders_TelepathyWaver, bank_A0.asm). Zoomer
-    ; crashed on touch for a reason not yet found; a pair of Wavers here
-    ; instead, confirmed working elsewhere (Terminator).
+    ; TELEPATHY test enemy - Cacatac (stationary, no movement AI) whose
+    ; touch triggers TELEPATHY instead of contact damage
+    ; (EnemyHeaders_TelepathyCacatac, bank_A0.asm). Both the Zoomer and
+    ; Waver versions crashed hard on touch.
     %EnemyPopulations(\
-    %enemyID(EnemyHeaders_TelepathyWaver),
+    %enemyID(EnemyHeaders_TelepathyCacatac),
     %XPosition($02F0),
     %YPosition($04C8),
     %initParam($0000),
-    %properties($2800),
+    %properties($2000),
     %extraProperties($0000),
-    %speedParams($0001, $0000))
-
-    %EnemyPopulations(\
-    %enemyID(EnemyHeaders_TelepathyWaver),
-    %XPosition($0330),
-    %YPosition($04C8),
-    %initParam($0000),
-    %properties($2800),
-    %extraProperties($0000),
-    %speedParams($0001, $0000))
+    %speedParams($0100, $0301))
     dw $FFFF : db $00                                                    ;A1886D;
 
 EnemyPopulations_CrateriaSuper:

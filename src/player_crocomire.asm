@@ -191,7 +191,7 @@ CrocomirePlayer_Render:
     ;---------------------------------------------------------------------------
     ; TELEPATHY
     ;
-    ; While active (neverRead0AA4, set by EnemyTouch_TriggerTelepathy in
+    ; While active (neverRead0787, set by EnemyTouch_TriggerTelepathy in
     ; bank_A0.asm when Samus touches a TelepathyZoomer), Croc freezes at
     ; whatever screen position he was already standing at, and Samus's real
     ; (invisible) position is synced to the tracked enemy every frame, so
@@ -206,7 +206,7 @@ CrocomirePlayer_Render:
     ; triggers.
     ;---------------------------------------------------------------------------
 
-    LDA.W neverRead0AA4
+    LDA.W neverRead0787
     BEQ .noTelepathy
 
     LDX.W neverRead0E48
@@ -230,7 +230,7 @@ CrocomirePlayer_Render:
 +   CMP.W #$0018
     BPL .stillActive
 
-    STZ.W neverRead0AA4
+    STZ.W neverRead0787
     BRA .useFrozenOrigin
 
   .stillActive:
@@ -634,6 +634,11 @@ CrocomirePlayer_DrawHitboxOutline:
 ; Y speed is 0 anyway), and we unconditionally overwrite it with the real
 ; current value at the end of every one of our own calls, so that stray
 ; write can't desync us from one of our own frames to the next.
+;
+; Uses neverRead0AA4 specifically (not neverRead0787, which TELEPATHY above
+; uses) - the two used to share a cell, which meant jumping (nonzero
+; SamusYSpeed written here every frame) was misread as TELEPATHY being
+; active, corrupting Samus's position and crashing the game on every jump.
 ;-------------------------------------------------------------------------------
 
 CrocomirePlayer_HandleLandingShake:
