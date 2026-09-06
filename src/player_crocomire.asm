@@ -615,6 +615,46 @@ CrocomirePlayer_QueueTestTiles:
     RTS
 
 
+;-------------------------------------------------------------------------------
+; Mini Crocomire test enemy (Landing Site)
+;
+; Draws our own composite spritemap - the exact same one the player uses -
+; through the game's ordinary enemy-drawing system, instead of the player's
+; hijacked render path. Works because the graphics are already resident in
+; VRAM/CGRAM every single frame regardless of room (the player's own render
+; runs unconditionally), so this enemy needs no graphics load of its own -
+; it just points at the same spritemap and lets the standard per-enemy
+; drawing dispatch (WriteEnemyOAM_IfNotFrozenOrInvincibleFrame, bank_A0.asm)
+; place it at its own (X,Y) instead of Samus's.
+;
+; SpawnEnemy_AlwaysSucceed (bank_A0.asm) already copies the population
+; entry's initParam straight into Enemy.instList, and defaults
+; Enemy.GFXOffset to 0 - which matches our composite's own tile numbering,
+; since we register no separate EnemySets graphics load for this header.
+; The one thing it doesn't default the way we need is Enemy.palette
+; (defaults to 0, but our composite's colours live in CGRAM palette 6) -
+; InitAI just forces that one field.
+;
+; Must live in the same bank as CrocomirePlayer80v55_CompositeSpritemap
+; (bank $A4, via EnemyHeaders_MiniCrocomire's %bank field) - the drawing
+; dispatch sets the data bank register from that field before resolving
+; Enemy.spritemap as a bank-relative pointer.
+;-------------------------------------------------------------------------------
+
+InitAI_MiniCrocomire:
+    LDX.W EnemyIndex
+    LDA.W #$0C00
+    STA.W Enemy.palette,X
+    RTL
+
+MainAI_MiniCrocomire:
+    RTL
+
+InstList_MiniCrocomire_Initial:
+    dw $7FFF,CrocomirePlayer80v55_CompositeSpritemap
+    dw Instruction_Common_Sleep
+
+
 CrocomirePlayer_TestTileTransfers:
 
     ;===========================================================================

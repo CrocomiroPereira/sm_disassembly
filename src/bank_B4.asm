@@ -232,7 +232,8 @@ EnemySetName_LandingSite_0_1_2:
 EnemySets_LandingSite_0_1_2:
     dw EnemyHeaders_ShipTop,$0002                                        ;B48193;
     dw EnemyHeaders_ShipBottomEntrance,$0007                             ;B48197;
-    dw EnemyHeaders_Zoomer,$0001
+    ; EnemyHeaders_MiniCrocomire needs no GFX load entry here - it draws
+    ; the player's own already-resident composite graphics (tileDataSize 0).
     dw $FFFF
     db $00                                                               ;B4819D;
 

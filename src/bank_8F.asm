@@ -9231,7 +9231,53 @@ MainASM_ScrollingSkyLand:
 ; Room $91F8, state $9247. Landing site, default
 ; Room $93AA. Landing site power bomb room
     JSL.L RoomMainASM_ScrollingSkyLand                                   ;8FC116;
+    JSR.W CheckRespawnLandingSiteMiniCrocomire
     RTS                                                                  ;8FC11A;
+
+; Keeps the Mini Crocomire test enemy under the ship in Landing Site (see
+; EnemyPopulations_LandingSite_0_1_2, bank_A1.asm) coming back after it's
+; killed, instead of it staying dead for the rest of the room visit - so it
+; can be used as a repeatable test target. Gated on RoomPointer so the other
+; room sharing this same MainASM (the power bomb room, $93AA) is unaffected.
+CheckRespawnLandingSiteMiniCrocomire:
+    PHP
+    REP #$30
+    LDA.W RoomPointer
+    CMP.W #$91F8
+    BNE .return
+
+    LDY.W #$0000
+  .scanLoop:
+    LDA.W ActiveEnemyIndices,Y
+    CMP.W #$FFFF
+    BEQ .notFound
+    TAX
+    LDA.W Enemy.ID,X
+    CMP.W #EnemyHeaders_MiniCrocomire
+    BEQ .return
+    INY
+    INY
+    BRA .scanLoop
+
+  .notFound:
+    LDX.W #.respawnData
+    JSL.L SpawnEnemy
+
+  .return:
+    PLP
+    RTS
+
+  .respawnData:
+;      /-------------------------------------- Enemy ID
+;      |     /-------------------------------- X position
+;      |     |     /-------------------------- Y position
+;      |     |     |     /-------------------- Initialisation parameter
+;      |     |     |     |     /-------------- Properties
+;      |     |     |     |     |     /-------- Extra properties
+;      |     |     |     |     |     |     /-- Parameters 1/2
+;      |     |     |     |     |     |     |
+    dw EnemyHeaders_MiniCrocomire
+    dw $0480,$04C8,InstList_MiniCrocomire_Initial,$2800,$0000,$0000,$0000
 
 
 ;;; $C11B: Main ASM: scrolling sky ocean ;;;

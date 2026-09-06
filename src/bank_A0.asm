@@ -12266,6 +12266,41 @@ EnemyHeaders_Zoomer:                                                     ;A0DCFF
     %vulnerabilities(EnemyVulnerabilities_Viola_Yard_HZoomer_Zeela_Sova_Zoomer),
     %name(EnemyName_Zoomer))
 
+; Mini Crocomire test enemy (Landing Site) - draws the player's own composite
+; spritemap (player_crocomire.asm, bank $A4) instead of loading unique
+; graphics of its own; see InitAI_MiniCrocomire there for why.
+EnemyHeaders_MiniCrocomire:
+    %EnemyHeader(\
+    %tileDataSize(0),
+    %palette(Palette_Zoomer),
+    %health(60),
+    %damage(20),
+    %width(48),
+    %height(56),
+    %bank(InitAI_MiniCrocomire>>16),
+    %hurtAITime(0),
+    %cry(0),
+    %bossID(0),
+    %initAI(InitAI_MiniCrocomire),
+    %parts(1),
+    %unused(0),
+    %mainAI(MainAI_MiniCrocomire),
+    %grappleAI(Common_GrappleAI_KillEnemy),
+    %hurtAI(RTL_A3804C),
+    %frozenAI(Common_NormalEnemyFrozenAI),
+    %timeIsFrozen(0),
+    %deathAnimation(0),
+    %powerBombReaction(0),
+    %variantIndex(0),
+    %enemyTouch(Common_NormalEnemyTouchAI),
+    %enemyShot(Common_NormalEnemyShotAI),
+    %spritemap(0),
+    %tileData(Tiles_Zoomer),
+    %layer(5),
+    %drops(EnemyDropChances_Zoomer),
+    %vulnerabilities(EnemyVulnerabilities_Viola_Yard_HZoomer_Zeela_Sova_Zoomer),
+    %name(0))
+
 EnemyHeaders_MZoomer:                                                    ;A0DD3F;
     %EnemyHeader(\
     %tileDataSize($0600),

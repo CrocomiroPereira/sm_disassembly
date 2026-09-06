@@ -1291,21 +1291,21 @@ EnemyPopulations_LandingSite_0_1_2:
     %extraProperties($0000),
     %speedParams($0000, $0001))
 
-    ; Placeholder "Mini Crocomire" for testing - the real Crocomire enemy
-    ; turned out to be unusable here (its InitAI is hard-wired to the boss
-    ; fight: BG2 tilemap tricks, camera changes, SRAM boss-death checks
-    ; scoped to Norfair's area index, not Crateria's). Standing in with a
-    ; plain Zoomer for now - simple, ordinary enemy, safe anywhere - while
-    ; we build a proper mini version. Same X as the ship, on the ground
-    ; beneath it.
+    ; Mini Crocomire test enemy - the real Crocomire enemy was unusable here
+    ; (its InitAI is hard-wired to the boss fight: BG2 tilemap tricks, camera
+    ; changes, SRAM boss-death checks scoped to Norfair's area index, not
+    ; Crateria's). This is a real custom enemy (EnemyHeaders_MiniCrocomire,
+    ; bank_A0.asm) that draws our own player composite spritemap instead of
+    ; loading unique graphics - see InitAI_MiniCrocomire in
+    ; player_crocomire.asm. Same X as the ship, on the ground beneath it.
     %EnemyPopulations(\
-    %enemyID(EnemyHeaders_Zoomer),
+    %enemyID(EnemyHeaders_MiniCrocomire),
     %XPosition($0480),
     %YPosition($04C8),
-    %initParam($0003),
+    %initParam(InstList_MiniCrocomire_Initial),
     %properties($2800),
     %extraProperties($0000),
-    %speedParams($0002, $0000))
+    %speedParams($0000, $0000))
     dw $FFFF : db $00                                                    ;A1886D;
 
 EnemyPopulations_CrateriaSuper:
