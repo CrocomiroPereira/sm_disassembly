@@ -23,6 +23,11 @@ CrocomirePlayer_WalkFrameCount  = $000C
 ; See PauseMenu_UnusedAnimationTimer0731 below for why this exists.
 CrocomirePlayer_SettleFrames    = $0008
 
+; CrocomirePlayer_Render reuses neverRead09E8 (genuinely dead vanilla RAM,
+; see memory.asm) to remember the OAMStack byte-offset it last drew into,
+; so next frame's OAM clear can target exactly that spot regardless of
+; where OAMStack naturally is this frame.
+
 ; Frame counter reuses PauseMenu_UnusedAnimationTimer0731 directly - an
 ; abandoned pause-menu RAM cell (slot 5 of an animation-timer table,
 ; explicitly marked "Unused" and only ever STZ'd at boot/pause-open, never
@@ -41,9 +46,61 @@ CrocomirePlayer_Render:
 
     REP #$30
 
+    ;---------------------------------------------------------------------------
+    ; Clear the exact OAM slots WE ourselves wrote to last frame, remembered
+    ; in neverRead09E8 (neverRead09E8 - genuinely dead vanilla
+    ; RAM, see memory.asm), before drawing anything new this frame.
+    ;
+    ; Confirmed 2026-09-06 via live OAM inspection in Mesen's Sprite Viewer:
+    ; a stray fragment kept appearing near the tail, overlapping our real
+    ; tail tip but not part of its tile data - a leftover OAM entry from a
+    ; previous frame that our own drawing never touched again.
+    ;
+    ; Root cause: DrawSamusSprites is fully replaced by this function (see
+    ; bank_90.asm), so by the time we run, OAMStack already reflects however
+    ; many sprites every OTHER system (enemies, HUD, background objects)
+    ; drew earlier that same frame - a value that drifts with unrelated game
+    ; state. A first fix cleared "39 slots starting from wherever OAMStack is
+    ; now", which clears the right COUNT of slots but not necessarily the
+    ; same slots we used on some earlier frame when OAMStack happened to be
+    ; different, so a stale entry from that earlier frame could survive
+    ; indefinitely. A second fix forced OAMStack to a fixed high slot range
+    ; (89-127) every frame - but that range turned out to already be in use
+    ; by another game system (broke rendering entirely: reverted).
+    ;
+    ; This version claims no OAM territory of its own: it just remembers
+    ; wherever IT happened to draw last frame and cleans up exactly that
+    ; spot before drawing wherever OAMStack naturally is THIS frame - so a
+    ; stale entry can never survive more than one frame, regardless of how
+    ; much OAMStack drifts, and no other system's slots are ever touched.
+    ;---------------------------------------------------------------------------
+
+    LDX.W neverRead09E8
+    SEP #$20
+    LDY.W #$0027            ; 39 slots: 8 (leg overlay) + 31 (body)
+
+  .clearOwnOAMFootprint:
+    LDA.B #$F0
+    STA.W OAMLow+1,X
+    INX
+    INX
+    INX
+    INX
+    CPX.W #$0200
+    BNE .clearNoWrap
+    LDX.W #$0000
+
+  .clearNoWrap:
+    DEY
+    BNE .clearOwnOAMFootprint
+
+    REP #$20
+
     ; Samus is invisible, so reserve her normal sprite tile updates
     STZ.W SamusTiles_TopHalfFlag
     STZ.W SamusTiles_BottomHalfFlag
+
+    JSR.W CrocomirePlayer_HandleLandingShake
 
     ;===========================================================================
     ; Load Crocomire graphics once, AFTER the room transition has finished.
@@ -92,6 +149,7 @@ CrocomirePlayer_Render:
     STZ.W PauseMenu_UnusedAnimationTimer0731
     LDA.W RoomPointer
     STA.W StartSamusRAM_Unused0A02
+    STZ.W neverRead09E8
     JSR.W CrocomirePlayer_QueueTestTiles
 
   .crocomireGraphicsDone:
@@ -101,6 +159,18 @@ CrocomirePlayer_Render:
 
     ; Crocomire BG palette 7 -> temporary sprite palette 6
     JSR.W CrocomirePlayer_LoadBGPalette
+
+    ; Drawn first so it lands on top of everything else this frame (same
+    ; priority level => lower OAM index wins => earlier-drawn is on top).
+    JSR.W CrocomirePlayer_DrawHitboxOutline
+
+    ; Remember where OUR OWN footprint (leg overlay + body, drawn below)
+    ; starts THIS frame, for next frame's self-clear. Captured here - after
+    ; the hitbox outline has already advanced OAMStack past its own entries
+    ; - not at function entry, so it actually matches where we end up
+    ; writing, not wherever OAMStack happened to be before the outline ran.
+    LDA.W OAMStack
+    STA.W neverRead09E8
 
 
     ;===========================================================================
@@ -176,6 +246,69 @@ CrocomirePlayer_Render:
     ; box) only when Samus is facing right.
     ;---------------------------------------------------------------------------
 
+    ;---------------------------------------------------------------------------
+    ; Walk-cycle leg overlay - first pass, facing-left only.
+    ;
+    ; Drawn BEFORE the static body below on purpose: on SNES OBJ hardware,
+    ; when two sprites share the same priority value, the one added to OAM
+    ; FIRST (lower OAM index) is displayed on top. Drawing this first makes
+    ; the moving leg win over the static body's overlapping foot tiles
+    ; instead of being hidden underneath it.
+    ;
+    ; The static composite below had its two outermost foot tiles removed
+    ; (they're redundant with this overlay - see the comments by the removed
+    ; entries), so this overlay must always draw something when facing left,
+    ; even when standing still - otherwise the feet would be missing a chunk
+    ; while idle. MovementType $01 = walking (same check the earlier
+    ; enemy-driven v0.004 prototype used): idle uses the neutral position
+    ; (overlay 0, timer held at 0); walking ping-pongs smoothly through all
+    ; 6 positions extracted from the vanilla walk cycle, wrapping the timer
+    ; every 10 steps (80 frames) so there's no dead pause at the loop point.
+    ; Facing-right is skipped for now (that composite kept its own static
+    ; feet untouched) - mirroring this overlay is follow-up work.
+    ;
+    ; UnusedMode7RotationAngle is reused as a free-running frame timer (only
+    ; otherwise touched by Mode7 setup, which doesn't run during normal
+    ; GameState $0008 gameplay).
+    ;---------------------------------------------------------------------------
+
+    LDA.W PoseXDirection
+    AND.W #$00FF
+    CMP.W #$0008
+    BEQ .walkOverlayDone
+
+    LDA.W MovementType
+    AND.W #$00FF
+    CMP.W #$0001
+    BNE .idleOverlay
+
+    LDA.W UnusedMode7RotationAngle
+    INC A
+    CMP.W #$0050            ; 80 = 10 steps * 8 frames/step
+    BNE .noWrap
+    LDA.W #$0000
+  .noWrap:
+    STA.W UnusedMode7RotationAngle
+    LSR A
+    LSR A
+    LSR A
+    BRA .haveOverlayIndex
+
+  .idleOverlay:
+    LDA.W #$0000
+
+  .haveOverlayIndex:
+    ASL A
+    TAX
+    LDA.W CrocomirePlayer_WalkPingPong,X
+    ASL A
+    TAX
+    LDA.W CrocomirePlayer_WalkOverlayPointers,X
+    TAY
+    JSL.L AddSpritemapToOAM_WithBaseTileNumber_8B22
+
+  .walkOverlayDone:
+
     LDY.W #CrocomirePlayer80v55_CompositeSpritemap
     LDA.W PoseXDirection
     AND.W #$00FF
@@ -191,6 +324,221 @@ CrocomirePlayer_Render:
     RTL
 
 ;-------------------------------------------------------------------------------
+; Debug: draw Samus's REAL hitbox as a 1px white outline, permanently visible
+; on top of the Crocomire composite. Recomputed fresh every frame from
+; SamusXRadius/SamusYRadius, so it tracks whatever pose Samus is actually in
+; (standing, jumping, crouching, morph ball, etc. - YRadius comes from
+; PoseDefinitions_YRadius per pose; XRadius is always a fixed 5, i.e. a
+; constant 10px box width).
+;
+; Built from free composite tiles $B0-$B9 (palette 6, same as everything
+; else - index 1 in CrocomirePlayer_BGPalette is pure white):
+;     $B0-$B6 - vertical segment, opaque for the top 1-7 rows (for whatever
+;                remainder is left after tiling full 8px segments)
+;     $B7     - vertical segment, opaque for all 8 rows
+;     $B8     - horizontal segment, opaque for all 8 columns
+;     $B9     - horizontal segment, opaque for the first 2 columns only
+;                (box width is always exactly 10px = one $B8 + one $B9)
+;
+; Self-clears its own previous frame's OAM footprint via neverRead0A18 -
+; same self-remembering technique as CrocomirePlayer_Render's own footprint
+; (neverRead09E8), kept as a separate scratch word so the two never collide.
+;-------------------------------------------------------------------------------
+
+CrocomirePlayer_DrawHitboxOutline:
+    LDX.W neverRead0A18
+    SEP #$20
+    LDY.W #$0018            ; 24 slots safety margin (worst case needs 16:
+                             ; max YRadius seen is 24 -> height 48 -> 6+6
+                             ; full vertical tiles both sides + 4 horizontal)
+
+  .clearHitboxFootprint:
+    LDA.B #$F0
+    STA.W OAMLow+1,X
+    INX
+    INX
+    INX
+    INX
+    CPX.W #$0200
+    BNE .clearHBNoWrap
+    LDX.W #$0000
+
+  .clearHBNoWrap:
+    DEY
+    BNE .clearHitboxFootprint
+
+    REP #$20
+
+    LDX.W OAMStack
+    STX.W neverRead0A18
+
+    LDA.W SamusXPosition
+    SEC
+    SBC.W SamusXRadius
+    SEC
+    SBC.W Layer1XPosition
+    STA.B DP_Temp12          ; left
+
+    LDA.W SamusYPosition
+    SEC
+    SBC.W SamusYRadius
+    SEC
+    SBC.W Layer1YPosition
+    STA.B DP_Temp14          ; top
+
+    LDA.W SamusYRadius
+    ASL A
+    STA.B DP_Temp16          ; height
+
+    LDA.W SamusXRadius
+    ASL A
+    STA.B DP_Temp18          ; width
+
+    ; --- top edge (2 tiles: 8px + 2px = 10px) ---
+    LDA.W #$00B8
+    STA.B DP_Temp1A
+    LDY.B DP_Temp14
+    LDA.B DP_Temp12
+    JSR .putEntry
+
+    LDA.W #$00B9
+    STA.B DP_Temp1A
+    LDY.B DP_Temp14
+    LDA.B DP_Temp12
+    CLC
+    ADC.W #$0008
+    JSR .putEntry
+
+    ; --- bottom edge ---
+    LDA.B DP_Temp14
+    CLC
+    ADC.B DP_Temp16
+    SEC
+    SBC.W #$0001
+    STA.B DP_Temp1C          ; bottomY
+
+    LDA.W #$00B8
+    STA.B DP_Temp1A
+    LDY.B DP_Temp1C
+    LDA.B DP_Temp12
+    JSR .putEntry
+
+    LDA.W #$00B9
+    STA.B DP_Temp1A
+    LDY.B DP_Temp1C
+    LDA.B DP_Temp12
+    CLC
+    ADC.W #$0008
+    JSR .putEntry
+
+    ; --- left edge: tile every 8px, then one partial tile for the remainder ---
+    LDA.B DP_Temp14
+    STA.B DP_Temp1C          ; y cursor
+    LDA.B DP_Temp16
+    STA.B DP_Temp1E          ; remaining height
+
+  .leftLoop:
+    LDA.B DP_Temp1E
+    CMP.W #$0008
+    BMI .leftRemainder
+    LDA.W #$00B7
+    STA.B DP_Temp1A
+    LDY.B DP_Temp1C
+    LDA.B DP_Temp12
+    JSR .putEntry
+    LDA.B DP_Temp1C
+    CLC
+    ADC.W #$0008
+    STA.B DP_Temp1C
+    LDA.B DP_Temp1E
+    SEC
+    SBC.W #$0008
+    STA.B DP_Temp1E
+    BRA .leftLoop
+
+  .leftRemainder:
+    LDA.B DP_Temp1E
+    BEQ .leftDone
+    CLC
+    ADC.W #$00AF             ; remainder (1..7) -> tile $B0..$B6
+    STA.B DP_Temp1A
+    LDY.B DP_Temp1C
+    LDA.B DP_Temp12
+    JSR .putEntry
+
+  .leftDone:
+
+    ; --- right edge ---
+    LDA.B DP_Temp12
+    CLC
+    ADC.B DP_Temp18
+    SEC
+    SBC.W #$0001
+    STA.B DP_Temp16          ; rightX (height no longer needed, reuse slot)
+
+    LDA.B DP_Temp14
+    STA.B DP_Temp1C
+    LDA.W SamusYRadius
+    ASL A
+    STA.B DP_Temp1E
+
+  .rightLoop:
+    LDA.B DP_Temp1E
+    CMP.W #$0008
+    BMI .rightRemainder
+    LDA.W #$00B7
+    STA.B DP_Temp1A
+    LDY.B DP_Temp1C
+    LDA.B DP_Temp16
+    JSR .putEntry
+    LDA.B DP_Temp1C
+    CLC
+    ADC.W #$0008
+    STA.B DP_Temp1C
+    LDA.B DP_Temp1E
+    SEC
+    SBC.W #$0008
+    STA.B DP_Temp1E
+    BRA .rightLoop
+
+  .rightRemainder:
+    LDA.B DP_Temp1E
+    BEQ .rightDone
+    CLC
+    ADC.W #$00AF
+    STA.B DP_Temp1A
+    LDY.B DP_Temp1C
+    LDA.B DP_Temp16
+    JSR .putEntry
+
+  .rightDone:
+    STX.W OAMStack           ; hand off our advanced cursor - otherwise the
+                             ; leg overlay/body draws that run right after us
+                             ; start from the old position and immediately
+                             ; overwrite everything we just drew.
+    RTS
+
+  .putEntry:
+    ; In: A = screen X, Y = screen Y (both 16-bit), DP_Temp1A = tile number.
+    ; Uses/advances the shared X register as the OAM write cursor.
+    STA.W OAMLow,X
+    TYA
+    SEP #$20
+    STA.W OAMLow+1,X
+    REP #$20
+    LDA.B DP_Temp1A
+    ORA.W #$3C00             ; priority 3, palette 6
+    STA.W OAMLow+2,X
+    INX
+    INX
+    INX
+    INX
+    CPX.W #$0200
+    BNE +
+    LDX.W #$0000
++   RTS
+
+;-------------------------------------------------------------------------------
 ; Queue persistent Crocomire graphics to VRAM
 ;
 ; Every entry:
@@ -198,6 +546,51 @@ CrocomirePlayer_Render:
 ;
 ; All sources currently live in ROM bank $AD.
 ;-------------------------------------------------------------------------------
+
+;-------------------------------------------------------------------------------
+; Landing shake: reuse the game's own generic environment shake - the same
+; one any Super Missile impact against a wall uses, anywhere, any room (see
+; bank_93.asm's projectile explosion handler: EarthquakeType $14, Timer $1E)
+; - every time Samus (visually Crocomire) touches solid ground while
+; falling, from a jump or off any ledge of any height.
+;
+; Confirmed 2026-09-06 via live memory watch in Mesen: checking
+; SamusSolidVerticalCollisionResult == 1 here never worked, because that
+; flag is set AND consumed/reset entirely within Samus's own movement/pose
+; update (Execute_SamusMovementHandler -> immediately followed by
+; SetProspectiveSamusPoseAccordingToSolidVerticalCollision_PSP in the same
+; per-frame call chain) - all of which runs and finishes before rendering
+; (Draw_Samus_Projectiles_Enemies_and_Enemy_Projectiles, which is what
+; reaches us) even starts. By the time we run, it's already back to 0.
+;
+; SamusYSpeed itself doesn't get consumed/reset that early - it's still
+; whatever the movement step left it at when we read it - so instead we
+; track it across frames ourselves: landing = previous frame's Y speed was
+; positive (genuinely falling) and this frame it's back to exactly 0 (just
+; stopped). neverRead0AA4 is also written by Enable_Horizontal_Slope_
+; Detection elsewhere, but only while Samus is already grounded (where
+; Y speed is 0 anyway), and we unconditionally overwrite it with the real
+; current value at the end of every one of our own calls, so that stray
+; write can't desync us from one of our own frames to the next.
+;-------------------------------------------------------------------------------
+
+CrocomirePlayer_HandleLandingShake:
+    LDA.W neverRead0AA4
+    BEQ .updateOnly
+    BMI .updateOnly
+
+    LDA.W SamusYSpeed
+    BNE .updateOnly
+
+    LDA.W #$0014
+    STA.W EarthquakeType
+    LDA.W #$001E
+    STA.W EarthquakeTimer
+
+  .updateOnly:
+    LDA.W SamusYSpeed
+    STA.W neverRead0AA4
+    RTS
 
 CrocomirePlayer_QueueTestTiles:
     LDX.W VRAMWriteStack
@@ -483,7 +876,7 @@ CrocomirePlayer_FullBodySpritemap:
 ;-------------------------------------------------------------------------------
 
 CrocomirePlayer80v55_CompositeSpritemap:
-    dw $0021
+    dw $001F
     %spritemapEntry(1, $10, $00, 0, 0, 3, 0, $00)
     %spritemapEntry(1, $20, $00, 0, 0, 3, 0, $02)
     %spritemapEntry(1, $30, $00, 0, 0, 3, 0, $04)
@@ -510,12 +903,12 @@ CrocomirePlayer80v55_CompositeSpritemap:
     %spritemapEntry(1, $30, $40, 0, 0, 3, 0, $4E)
     %spritemapEntry(1, $40, $40, 0, 0, 3, 0, $60)
     %spritemapEntry(1, $50, $40, 0, 0, 3, 0, $62)
-    %spritemapEntry(1, $00, $50, 0, 0, 3, 0, $64)
+    ; $00,$50->$64 and $50,$50->$6E removed: redundant with the walk-cycle
+    ; leg overlay below (confirmed safe to drop offline - no visible gap).
     %spritemapEntry(1, $10, $50, 0, 0, 3, 0, $66)
     %spritemapEntry(1, $20, $50, 0, 0, 3, 0, $68)
     %spritemapEntry(1, $30, $50, 0, 0, 3, 0, $6A)
     %spritemapEntry(1, $40, $50, 0, 0, 3, 0, $6C)
-    %spritemapEntry(1, $50, $50, 0, 0, 3, 0, $6E)
 
     ;---------------------------------------------------------------------------
     ; Recovered tail tip
@@ -530,6 +923,14 @@ CrocomirePlayer80v55_CompositeSpritemap:
     ; Appending past tile $BF (tried first) silently corrupted whatever sits
     ; next in VRAM after this graphics block, since the DMA queued by
     ; CrocomirePlayer_QueueTestTiles below is sized to exactly that budget.
+    ;
+    ; The tile data at $80/$81/$90/$91 is now blanked (see
+    ; CrocomirePlayer_QueueTestTiles' source .bin - cleared 2026-09-06: this
+    ; was the actual stray fragment, confirmed live in Mesen), so this entry
+    ; draws nothing regardless of position. Left at its original recovered
+    ; position ($60,$50) per request, rather than the $50 gap-closing fix
+    ; tried earlier - moot while the tile is blank, but keeps this ready to
+    ; restore if the tip graphic ever comes back.
     ;---------------------------------------------------------------------------
 
     %spritemapEntry(1, $60, $50, 0, 0, 3, 0, $80)
@@ -578,6 +979,101 @@ CrocomirePlayer80v55_CompositeSpritemap_FacingRight:
     %spritemapEntry(1, $20, $50, 0, 1, 3, 0, $6C)
     %spritemapEntry(1, $10, $50, 0, 1, 3, 0, $6E)
     %spritemapEntry(1, $00, $50, 0, 1, 3, 0, $80)
+
+;-------------------------------------------------------------------------------
+; Walk-cycle leg overlay tables
+;
+; 6 static positions per leg, extracted from the vanilla ChargeForward/StepBack
+; walk cycle (Spritemap_Crocomire_5..A for the front leg, _B..10 for the back leg,
+; tile $DF x-offset per frame), scaled x0.8. Legs move in opposite phase (one
+; extends while the other retracts), matching the original.
+;
+; The leg artwork itself (not just its position) is downscaled x0.8 from the
+; vanilla tiles using majority-color voting (avoids introducing off-palette
+; colours) - 5 source 8x8 tiles -> 4 tiles. See tools/ for the one-off script.
+;
+; Anchors were tuned by eye against the existing static feet - not exact, first pass.
+;-------------------------------------------------------------------------------
+
+CrocomirePlayer_WalkOverlay_0:
+    dw $0008
+    %spritemapEntry(0, $04, $56, 0, 0, 3, 0, $82)
+    %spritemapEntry(0, $0C, $56, 0, 0, 3, 0, $83)
+    %spritemapEntry(0, $14, $56, 0, 0, 3, 0, $84)
+    %spritemapEntry(0, $1C, $56, 0, 0, 3, 0, $85)
+    %spritemapEntry(0, $40, $56, 0, 0, 3, 0, $82)
+    %spritemapEntry(0, $48, $56, 0, 0, 3, 0, $83)
+    %spritemapEntry(0, $50, $56, 0, 0, 3, 0, $84)
+    %spritemapEntry(0, $58, $56, 0, 0, 3, 0, $85)
+
+CrocomirePlayer_WalkOverlay_1:
+    dw $0008
+    %spritemapEntry(0, $06, $56, 0, 0, 3, 0, $82)
+    %spritemapEntry(0, $0E, $56, 0, 0, 3, 0, $83)
+    %spritemapEntry(0, $16, $56, 0, 0, 3, 0, $84)
+    %spritemapEntry(0, $1E, $56, 0, 0, 3, 0, $85)
+    %spritemapEntry(0, $39, $56, 0, 0, 3, 0, $82)
+    %spritemapEntry(0, $41, $56, 0, 0, 3, 0, $83)
+    %spritemapEntry(0, $49, $56, 0, 0, 3, 0, $84)
+    %spritemapEntry(0, $51, $56, 0, 0, 3, 0, $85)
+
+CrocomirePlayer_WalkOverlay_2:
+    dw $0008
+    %spritemapEntry(0, $08, $56, 0, 0, 3, 0, $82)
+    %spritemapEntry(0, $10, $56, 0, 0, 3, 0, $83)
+    %spritemapEntry(0, $18, $56, 0, 0, 3, 0, $84)
+    %spritemapEntry(0, $20, $56, 0, 0, 3, 0, $85)
+    %spritemapEntry(0, $34, $56, 0, 0, 3, 0, $82)
+    %spritemapEntry(0, $3C, $56, 0, 0, 3, 0, $83)
+    %spritemapEntry(0, $44, $56, 0, 0, 3, 0, $84)
+    %spritemapEntry(0, $4C, $56, 0, 0, 3, 0, $85)
+
+CrocomirePlayer_WalkOverlay_3:
+    dw $0008
+    %spritemapEntry(0, $0C, $56, 0, 0, 3, 0, $82)
+    %spritemapEntry(0, $14, $56, 0, 0, 3, 0, $83)
+    %spritemapEntry(0, $1C, $56, 0, 0, 3, 0, $84)
+    %spritemapEntry(0, $24, $56, 0, 0, 3, 0, $85)
+    %spritemapEntry(0, $30, $56, 0, 0, 3, 0, $82)
+    %spritemapEntry(0, $38, $56, 0, 0, 3, 0, $83)
+    %spritemapEntry(0, $40, $56, 0, 0, 3, 0, $84)
+    %spritemapEntry(0, $48, $56, 0, 0, 3, 0, $85)
+
+CrocomirePlayer_WalkOverlay_4:
+    dw $0008
+    %spritemapEntry(0, $10, $56, 0, 0, 3, 0, $82)
+    %spritemapEntry(0, $18, $56, 0, 0, 3, 0, $83)
+    %spritemapEntry(0, $20, $56, 0, 0, 3, 0, $84)
+    %spritemapEntry(0, $28, $56, 0, 0, 3, 0, $85)
+    %spritemapEntry(0, $2C, $56, 0, 0, 3, 0, $82)
+    %spritemapEntry(0, $34, $56, 0, 0, 3, 0, $83)
+    %spritemapEntry(0, $3C, $56, 0, 0, 3, 0, $84)
+    %spritemapEntry(0, $44, $56, 0, 0, 3, 0, $85)
+
+CrocomirePlayer_WalkOverlay_5:
+    dw $0008
+    %spritemapEntry(0, $15, $56, 0, 0, 3, 0, $82)
+    %spritemapEntry(0, $1D, $56, 0, 0, 3, 0, $83)
+    %spritemapEntry(0, $25, $56, 0, 0, 3, 0, $84)
+    %spritemapEntry(0, $2D, $56, 0, 0, 3, 0, $85)
+    %spritemapEntry(0, $2A, $56, 0, 0, 3, 0, $82)
+    %spritemapEntry(0, $32, $56, 0, 0, 3, 0, $83)
+    %spritemapEntry(0, $3A, $56, 0, 0, 3, 0, $84)
+    %spritemapEntry(0, $42, $56, 0, 0, 3, 0, $85)
+
+; Ping-pong index (0..9) -> leg table step (0..5): step forward then back,
+; no dead pause - the timer above wraps every 10 steps to match this exactly.
+CrocomirePlayer_WalkPingPong:
+    dw $0000,$0001,$0002,$0003,$0004,$0005,$0004,$0003
+    dw $0002,$0001
+
+CrocomirePlayer_WalkOverlayPointers:
+    dw CrocomirePlayer_WalkOverlay_0
+    dw CrocomirePlayer_WalkOverlay_1
+    dw CrocomirePlayer_WalkOverlay_2
+    dw CrocomirePlayer_WalkOverlay_3
+    dw CrocomirePlayer_WalkOverlay_4
+    dw CrocomirePlayer_WalkOverlay_5
 
 warnpc $A50000
 

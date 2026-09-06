@@ -5075,15 +5075,21 @@ SamusPhysicsConstants:
 
   .YSubAccelerationInAir:
 ; Samus Y subacceleration in air
-    dw regional($1C00, $2800)                                            ;909EA1;
+; Croc's jump: x5'd (2026-09-06) to shrink both jump height and horizontal
+; range to x0.2 of vanilla, without touching jump takeoff speed or ground
+; run speed. Height is proportional to v^2/g and time-in-air to v/g, so with
+; takeoff velocity v unchanged, multiplying gravity g by 5 divides height by
+; 5 AND leaves time-in-air divided by 5 too - which, at unchanged horizontal
+; speed, divides horizontal range by 5 as well. One constant, both axes.
+    dw regional($1C00*5, $2800*5)                                        ;909EA1;
 
   .YSubAccelerationInWater:
 ; Samus Y subacceleration in water
-    dw $0800*!SPF                                                        ;909EA3;
+    dw $0800*5*!SPF                                                      ;909EA3;
 
   .YSubAccelerationInAcidLava:
 ; Samus Y subacceleration in acid/lava
-    dw $0900*!SPF                                                        ;909EA5;
+    dw $0900*5*!SPF                                                      ;909EA5;
 
   .YAccelerationInAir:
 ; Samus Y acceleration in air
@@ -6793,31 +6799,13 @@ Handle_Samus_Cooldown:
 
 ;;; $AC39: Check if Samus can fire beam ;;;
 Check_if_Samus_Can_Fire_Beam:
-    ; Crocomire player prototype: Samus's own body/HUD are hidden while
-    ; playing as Crocomire (src/player_crocomire.asm), but nothing else
-    ; stopped her from still firing - shots spawned and drew normally at
-    ; her real, now-invisible position, appearing as a detached stray
-    ; sprite near the visible Crocomire body. Disable firing during normal
-    ; gameplay (GameState $0008, same condition CrocomirePlayer_Render uses)
-    ; only, so scripted cutscenes that fire on Samus's behalf under a
-    ; different GameState (e.g. the intro) are unaffected.
-    ;
-    ; 2026-09-05 regression note: an earlier unconditional version of this
-    ; disable softlocked the intro cutscene, which fires a scripted missile
-    ; while GameState != $0008.
-    PHP
-    REP #$20
-    LDA.W GameState
-    CMP.W #$0008
-    BEQ .crocomireFireDisabled
-    PLP
-    BRA .beamFireAllowed
-
-  .crocomireFireDisabled:
-    PLP
-    BRA .noFire
-
-  .beamFireAllowed:
+    ; 2026-09-06: reverted the Crocomire-prototype fire disable added here.
+    ; It stopped Samus's beam entirely during normal gameplay to hide a
+    ; stray-sprite cosmetic glitch, but doors need a projectile hit on their
+    ; door cap to open - disabling firing softlocked normal room traversal
+    ; (confirmed: player got stuck unable to leave a room). Being able to
+    ; move through the game takes priority over that cosmetic issue, which
+    ; is being tracked/fixed separately (see player_crocomire.asm).
     LDA.W SamusProjectile_ProjectileCounter                              ;90AC39;
     CMP.W #$0005                                                         ;90AC3C;
     BPL .noFire                                                          ;90AC3F;
@@ -6844,21 +6832,7 @@ Check_if_Samus_Can_Fire_Missile:
 
 ; Increments projectile counter(!)
 
-    ; Crocomire player prototype: see Check_if_Samus_Can_Fire_Beam above.
-    ; Same GameState-gated disable, for missiles/super missiles.
-    PHP
-    REP #$20
-    LDA.W GameState
-    CMP.W #$0008
-    BEQ .crocomireFireDisabled
-    PLP
-    BRA .missileFireAllowed
-
-  .crocomireFireDisabled:
-    PLP
-    BRA .noFire
-
-  .missileFireAllowed:
+    ; 2026-09-06: reverted, see Check_if_Samus_Can_Fire_Beam above.
     LDA.W SelectedHUDItem                                                ;90AC5A;
     CMP.W #$0002                                                         ;90AC5D;
     BEQ .superMissile                                                    ;90AC60;

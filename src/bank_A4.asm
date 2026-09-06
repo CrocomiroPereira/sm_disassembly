@@ -1479,98 +1479,27 @@ UpdateCrocomireBG2XScroll:
 
 
 ;;; $8C04: Main AI - enemy $DDBF (Crocomire) ;;;
-
-
+;
+; 2026-09-06: reverted to vanilla. This function was hijacked by an earlier,
+; abandoned prototype (branches prototype-crocomire / v004-player-renderer)
+; to make the vanilla Crocomire enemy object follow Samus's real position and
+; animate as a "playable" stand-in. That approach was abandoned in favour of
+; the OAM-composite renderer in player_crocomire.asm, but this hijack was
+; never cleaned up - it kept running in the background on top of the new
+; renderer, drawing the vanilla boss's charge-attack spritemap at Samus's
+; real (hidden) position whenever MovementType==1 (walking), which is
+; exactly the stray red/white/orange fragment reported near the composite's
+; tail during the walk-cycle work. It would also have broken the real
+; Crocomire boss fight, had that ever been reached, since its AI was
+; permanently repurposed to chase Samus instead of behaving as a boss.
 MainAI_Crocomire:
-    LDX.W EnemyIndex
-
-    ; Track player facing direction
-    LDA.W PoseXDirection
-    AND.W #$000C
-    CMP.W #$0004
-    BEQ .facingLeft
-    CMP.W #$0008
-    BEQ .facingRight
-    BRA .facingDone
-
-  .facingLeft:
-    LDA.W #$0000
-    STA.W Crocomire.fightFlags,X
-    BRA .facingDone
-
-  .facingRight:
-    LDA.W #$0001
-    STA.W Crocomire.fightFlags,X
-
-  .facingDone:
-
-
-    ; Keep Crocomire's secondary enemy part locked to player position
-    LDA.W SamusXPosition
-    STA.W Enemy[1].XPosition,X
-
-    LDA.W SamusYPosition
-    CLC
-    ADC.W SamusYRadius
-    SEC
-    SBC.W #$0038
-    STA.W Enemy[1].YPosition,X
-
-
-    ; Player prototype: Crocomire follows Samus horizontally
-    LDA.W SamusXPosition
-    STA.W Enemy.XPosition,X
-
-    ; Align Crocomire's feet with Samus's feet
-    LDA.W SamusYPosition
-    CLC
-    ADC.W SamusYRadius
-    SEC
-    SBC.W #$0038
-    STA.W Enemy.YPosition,X
-
-    ; Samus movement type 1 = running
-    LDA.W MovementType
-    AND.W #$00FF
-    CMP.W #$0001
-    BEQ .walking
-
-  .idle:
-    ; Animation state 1 = idle
-    LDA.W Crocomire.deathSequenceIndex,X
-    CMP.W #$0001
-    BEQ .animationDone
-
-    LDA.W #$0001
-    STA.W Crocomire.deathSequenceIndex,X
-
-    LDA.W #InstList_Crocomire_PlayerIdle
-    STA.W Enemy.instList,X
-
-    LDA.W #$0001
-    STA.W Enemy.instTimer,X
-
-    BRA .animationDone
-
-  .walking:
-    ; Animation state 2 = walking
-    LDA.W Crocomire.deathSequenceIndex,X
-    CMP.W #$0002
-    BEQ .animationDone
-
-    LDA.W #$0002
-    STA.W Crocomire.deathSequenceIndex,X
-
-    LDA.W #InstList_Crocomire_Initial
-    STA.W Enemy.instList,X
-
-    LDA.W #$0001
-    STA.W Enemy.instTimer,X
-
-  .animationDone:
-    ; Keep Crocomire's vanilla BG2 body/head aligned with player
-    JSL.L UpdateCrocomireBG2Scroll
-
+    PHB
+    LDA.W Crocomire.deathSequenceIndex
+    TAX
+    JSR.W (.pointers,X)
+    JSR.W Crocomire_vs_Samus_CollisionHandling
+    JSR.W CrocomireHurtFlashHandling
+    PLB
     RTL
 
   .pointers:
@@ -4152,29 +4081,11 @@ EnemyShot_Crocomire_SpawnShotExplosion_duplicate:
 
 
 ;;; $BADE: Instruction list - Crocomire - initial ;;;
-;;; DEV - playable Crocomire walking animation ;;;
-
-;;; DEV - playable Crocomire idle ;;;
-InstList_Crocomire_PlayerIdle:
-    dw $7FFF,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_0
-    dw Instruction_Common_Sleep
-
-
+; Reverted to vanilla 2026-09-06 - see the note on MainAI_Crocomire above.
+; InstList_Crocomire_PlayerIdle (a leftover from the same abandoned hijack)
+; removed entirely - nothing references it once MainAI_Crocomire is vanilla.
 InstList_Crocomire_Initial:
-    dw $0006,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_0
-    dw $0007,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_1
-    dw $0007,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_2
-    dw $0006,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_3
-    dw $0007,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_4
-    dw $0007,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_5
-    dw $0006,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_6
-    dw $0007,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_7
-    dw $0007,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_8
-    dw $0006,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_9
-    dw $0007,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_A
-    dw $0007,ExtendedSpritemap_Crocomire_ChargeForward_StepBack_B
-    dw Instruction_Common_GotoY
-    dw InstList_Crocomire_Initial
+    dw $7FFF,ExtendedSpritemap_Crocomire_0
     dw Instruction_Common_Sleep
 
 
