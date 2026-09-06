@@ -650,9 +650,101 @@ InitAI_MiniCrocomire:
 MainAI_MiniCrocomire:
     RTL
 
+; Two-frame shuffle: each frame is the full body composite (31 entries)
+; plus one leg-overlay pose (8 entries, from the player's own walk-cycle
+; tables) merged into a single spritemap, since the enemy-drawing dispatch
+; only tracks one Enemy.spritemap pointer at a time (no separate overlay
+; layer like the player's own two-JSL draw). Instruction_Common_GotoY loops
+; it forever - same primitive used by every other looping enemy animation.
 InstList_MiniCrocomire_Initial:
-    dw $7FFF,CrocomirePlayer80v55_CompositeSpritemap
-    dw Instruction_Common_Sleep
+    dw $0020,MiniCrocomire_Spritemap_Frame0
+    dw $0020,MiniCrocomire_Spritemap_Frame1
+    dw Instruction_Common_GotoY
+    dw InstList_MiniCrocomire_Initial
+
+MiniCrocomire_Spritemap_Frame0:
+    dw $0027
+    %spritemapEntry(0, $04, $56, 0, 0, 3, 0, $82)
+    %spritemapEntry(0, $0C, $56, 0, 0, 3, 0, $83)
+    %spritemapEntry(0, $14, $56, 0, 0, 3, 0, $84)
+    %spritemapEntry(0, $1C, $56, 0, 0, 3, 0, $85)
+    %spritemapEntry(0, $40, $56, 0, 0, 3, 0, $82)
+    %spritemapEntry(0, $48, $56, 0, 0, 3, 0, $83)
+    %spritemapEntry(0, $50, $56, 0, 0, 3, 0, $84)
+    %spritemapEntry(0, $58, $56, 0, 0, 3, 0, $85)
+    %spritemapEntry(1, $10, $00, 0, 0, 3, 0, $00)
+    %spritemapEntry(1, $20, $00, 0, 0, 3, 0, $02)
+    %spritemapEntry(1, $30, $00, 0, 0, 3, 0, $04)
+    %spritemapEntry(1, $40, $00, 0, 0, 3, 0, $06)
+    %spritemapEntry(1, $00, $10, 0, 0, 3, 0, $08)
+    %spritemapEntry(1, $10, $10, 0, 0, 3, 0, $0A)
+    %spritemapEntry(1, $20, $10, 0, 0, 3, 0, $0C)
+    %spritemapEntry(1, $30, $10, 0, 0, 3, 0, $0E)
+    %spritemapEntry(1, $40, $10, 0, 0, 3, 0, $20)
+    %spritemapEntry(1, $00, $20, 0, 0, 3, 0, $22)
+    %spritemapEntry(1, $10, $20, 0, 0, 3, 0, $24)
+    %spritemapEntry(1, $20, $20, 0, 0, 3, 0, $26)
+    %spritemapEntry(1, $30, $20, 0, 0, 3, 0, $28)
+    %spritemapEntry(1, $40, $20, 0, 0, 3, 0, $2A)
+    %spritemapEntry(1, $50, $20, 0, 0, 3, 0, $2C)
+    %spritemapEntry(1, $00, $30, 0, 0, 3, 0, $2E)
+    %spritemapEntry(1, $10, $30, 0, 0, 3, 0, $40)
+    %spritemapEntry(1, $20, $30, 0, 0, 3, 0, $42)
+    %spritemapEntry(1, $30, $30, 0, 0, 3, 0, $44)
+    %spritemapEntry(1, $40, $30, 0, 0, 3, 0, $46)
+    %spritemapEntry(1, $00, $40, 0, 0, 3, 0, $48)
+    %spritemapEntry(1, $10, $40, 0, 0, 3, 0, $4A)
+    %spritemapEntry(1, $20, $40, 0, 0, 3, 0, $4C)
+    %spritemapEntry(1, $30, $40, 0, 0, 3, 0, $4E)
+    %spritemapEntry(1, $40, $40, 0, 0, 3, 0, $60)
+    %spritemapEntry(1, $50, $40, 0, 0, 3, 0, $62)
+    %spritemapEntry(1, $10, $50, 0, 0, 3, 0, $66)
+    %spritemapEntry(1, $20, $50, 0, 0, 3, 0, $68)
+    %spritemapEntry(1, $30, $50, 0, 0, 3, 0, $6A)
+    %spritemapEntry(1, $40, $50, 0, 0, 3, 0, $6C)
+    %spritemapEntry(1, $60, $50, 0, 0, 3, 0, $80)
+
+MiniCrocomire_Spritemap_Frame1:
+    dw $0027
+    %spritemapEntry(0, $0C, $56, 0, 0, 3, 0, $82)
+    %spritemapEntry(0, $14, $56, 0, 0, 3, 0, $83)
+    %spritemapEntry(0, $1C, $56, 0, 0, 3, 0, $84)
+    %spritemapEntry(0, $24, $56, 0, 0, 3, 0, $85)
+    %spritemapEntry(0, $30, $56, 0, 0, 3, 0, $82)
+    %spritemapEntry(0, $38, $56, 0, 0, 3, 0, $83)
+    %spritemapEntry(0, $40, $56, 0, 0, 3, 0, $84)
+    %spritemapEntry(0, $48, $56, 0, 0, 3, 0, $85)
+    %spritemapEntry(1, $10, $00, 0, 0, 3, 0, $00)
+    %spritemapEntry(1, $20, $00, 0, 0, 3, 0, $02)
+    %spritemapEntry(1, $30, $00, 0, 0, 3, 0, $04)
+    %spritemapEntry(1, $40, $00, 0, 0, 3, 0, $06)
+    %spritemapEntry(1, $00, $10, 0, 0, 3, 0, $08)
+    %spritemapEntry(1, $10, $10, 0, 0, 3, 0, $0A)
+    %spritemapEntry(1, $20, $10, 0, 0, 3, 0, $0C)
+    %spritemapEntry(1, $30, $10, 0, 0, 3, 0, $0E)
+    %spritemapEntry(1, $40, $10, 0, 0, 3, 0, $20)
+    %spritemapEntry(1, $00, $20, 0, 0, 3, 0, $22)
+    %spritemapEntry(1, $10, $20, 0, 0, 3, 0, $24)
+    %spritemapEntry(1, $20, $20, 0, 0, 3, 0, $26)
+    %spritemapEntry(1, $30, $20, 0, 0, 3, 0, $28)
+    %spritemapEntry(1, $40, $20, 0, 0, 3, 0, $2A)
+    %spritemapEntry(1, $50, $20, 0, 0, 3, 0, $2C)
+    %spritemapEntry(1, $00, $30, 0, 0, 3, 0, $2E)
+    %spritemapEntry(1, $10, $30, 0, 0, 3, 0, $40)
+    %spritemapEntry(1, $20, $30, 0, 0, 3, 0, $42)
+    %spritemapEntry(1, $30, $30, 0, 0, 3, 0, $44)
+    %spritemapEntry(1, $40, $30, 0, 0, 3, 0, $46)
+    %spritemapEntry(1, $00, $40, 0, 0, 3, 0, $48)
+    %spritemapEntry(1, $10, $40, 0, 0, 3, 0, $4A)
+    %spritemapEntry(1, $20, $40, 0, 0, 3, 0, $4C)
+    %spritemapEntry(1, $30, $40, 0, 0, 3, 0, $4E)
+    %spritemapEntry(1, $40, $40, 0, 0, 3, 0, $60)
+    %spritemapEntry(1, $50, $40, 0, 0, 3, 0, $62)
+    %spritemapEntry(1, $10, $50, 0, 0, 3, 0, $66)
+    %spritemapEntry(1, $20, $50, 0, 0, 3, 0, $68)
+    %spritemapEntry(1, $30, $50, 0, 0, 3, 0, $6A)
+    %spritemapEntry(1, $40, $50, 0, 0, 3, 0, $6C)
+    %spritemapEntry(1, $60, $50, 0, 0, 3, 0, $80)
 
 
 CrocomirePlayer_TestTileTransfers:

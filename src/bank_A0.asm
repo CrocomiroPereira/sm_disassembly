@@ -1512,7 +1512,18 @@ ProcessEnemySet_LoadPalettesAndEnemyLoadingData:
     PHX                                                                  ;A08D64;
     PHY                                                                  ;A08D65;
     STZ.W EnemyTileData_StackPointer                                     ;A08D66;
-    LDA.W #$0800                                                         ;A08D69;
+    ; Was $0800 (tile $80/128) - the end of vanilla Samus's own OBJ tile
+    ; budget, which is exactly where per-room enemy graphics start getting
+    ; allocated. Our player composite (player_crocomire.asm) now occupies
+    ; the full 192 tiles ($00-$BF) of that same budget, including the
+    ; recovered tail tip and walk-cycle leg tiles added past the original
+    ; 128-tile boundary - so any room enemy needing its own OBJ graphics
+    ; (confirmed with Landing Site's ship, and a "Mini Crocomire" test
+    ; enemy) was getting allocated starting at $0800, directly overlapping
+    ; and stomping the back third of our composite (and vice versa).
+    ; Bumped to $0C00 (tile $C0/192) to reserve our composite's full,
+    ; current footprint globally, in every room, rather than shrinking it.
+    LDA.W #$0C00                                                         ;A08D69;
     STA.B DP_Temp1E                                                      ;A08D6C;
     LDA.W #$0000                                                         ;A08D6E;
     STA.L EnemyGFXData_IDs                                               ;A08D71;
